@@ -31,8 +31,15 @@ export const AuthProvider = ({ children }) => {
         // Real-time listener for user data
         const userDocRef = doc(db, "users", user.uid);
         
+        // Safety Timeout: Force loading to false if Firestore hangs
+        const safetyTimeout = setTimeout(() => {
+            console.warn("[Auth] Firestore snapshot timed out - forcing load complete.");
+            setLoading(false);
+        }, 5000);
+
         // Return the inner unsubscribe function to clean up this listener when auth state changes
         const unsubDoc = onSnapshot(userDocRef, (docSnap) => {
+            clearTimeout(safetyTimeout);
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setUserData(data);
@@ -42,10 +49,6 @@ export const AuthProvider = ({ children }) => {
                 // IMPORTANT: Status Check - Force logout if pending/banned
                 if (data.status === 'pending') {
                     // Logic to handle pending state updates live? 
-                    // Maybe we don't force logout immediately to allow UI to show "Pending" message?
-                    // But typically we want them out or restricted. 
-                    // Login function blocks them initially. 
-                    // If they are approved while on the page, they gain access!
                 }
             } else {
                  // First time user or doc missing?
@@ -54,12 +57,16 @@ export const AuthProvider = ({ children }) => {
             }
             setLoading(false);
         }, (error) => {
+            clearTimeout(safetyTimeout);
             console.error("Error fetching user data:", error);
             setCurrentUser(user);
             setLoading(false);
         });
         
-        return () => unsubDoc(); 
+        return () => {
+            clearTimeout(safetyTimeout);
+            unsubDoc();
+        }; 
         
       } else {
         setCurrentUser(null);
