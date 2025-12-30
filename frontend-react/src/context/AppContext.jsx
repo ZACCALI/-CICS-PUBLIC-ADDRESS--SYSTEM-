@@ -481,6 +481,7 @@ export const AppProvider = ({ children }) => {
       // OPTIMISTIC KILL: Stop everything immediately if activating
       if (action === 'ACTIVATED') {
           stopAllAudio();
+          setEmergencyActive(true); // Immediate UI response
       }
 
       try {

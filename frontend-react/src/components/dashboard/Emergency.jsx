@@ -15,11 +15,10 @@ const Emergency = () => {
   useEffect(() => {
       if (emergencyActive) {
           setIsScriptPlaying(true);
-          // Approximate length of emergency script "Attention... This is an emergency..."
-          // Set to 14 seconds to be safe
+          // Reduced to 1 second for instant deactivation capability
           const timer = setTimeout(() => {
               setIsScriptPlaying(false);
-          }, 14000); 
+          }, 1000); 
           return () => clearTimeout(timer);
       } else {
           setIsScriptPlaying(false);

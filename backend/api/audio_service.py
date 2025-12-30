@@ -142,23 +142,36 @@ class AudioService:
         """Maps logical zones (names) to ALSA card IDs"""
         cards = set()
         
+        print(f"[AudioService] Mapping Zones to Cards: {zones}")
+        
         # If 'All Zones' or empty, play on all relevant cards
         if not zones or "All Zones" in zones:
             for v in self.zones_config.values():
                 if isinstance(v, list): cards.update(v)
                 else: cards.add(v)
-            if not cards: cards.add(0) # Default to 0
+            if not cards: 
+                print("[AudioService] No zones found in config, defaulting to Card 2 (Pi Speakers)")
+                cards.add(2) # Force Pi Speakers instead of HDMI (0)
+            print(f"[AudioService] Targeted All Cards: {list(cards)}")
             return list(cards)
 
         # Specific Zones
         for z in zones:
             # Fuzzy match or exact match from config
+            found = False
             for config_name, card_id in self.zones_config.items():
                 if z.lower() in config_name.lower():
                     if isinstance(card_id, list): cards.update(card_id)
                     else: cards.add(card_id)
+                    found = True
+            if not found:
+                print(f"[AudioService] Warning: Zone '{z}' not found in zones_config.json")
         
-        if not cards: cards.add(0) # Fallback
+        if not cards: 
+            print("[AudioService] Warning: No valid cards found for zones, defaulting to Card 2")
+            cards.add(2) 
+            
+        print(f"[AudioService] Final Card Selection: {list(cards)}")
         return list(cards)
 
     def _play_multizone(self, intro, body, card_ids, start_time=0):
