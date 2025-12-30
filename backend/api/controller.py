@@ -208,7 +208,14 @@ class PAController:
 
                 # PREEMPTION
                 self._preempt_current_task(new_task.priority)
-                self._start_task(new_task)
+                
+                # --- NEW: NON-BLOCKING EMERGENCY ---
+                if new_task.type == TaskType.EMERGENCY:
+                    # Run activation in background so API returns instantly
+                    threading.Thread(target=self._start_task, args=(new_task,), daemon=True).start()
+                else:
+                    self._start_task(new_task)
+                
                 return True
             
             else:
@@ -619,7 +626,18 @@ class PAController:
              
              # SYNC PLAYBACK: Blocks this thread until finished, keeping active_task in UI
              # targets ALSA Card 2 (Pi Speakers) via zones=['All Zones']
-             audio_service.play_announcement(None, script, voice='female', zones=['All Zones'])
+             # skip_stop=True allows siren to keep looping in background
+             audio_service.play_announcement(None, script, voice='female', zones=['All Zones'], skip_stop=True)
+
+             # --- AUTO-UNLOCK DEACTIVATION ---
+             # Once the script is done, we clear current_task so frontend shows "DEACTIVATE"
+             # but we keep emergency_mode=True so siren continues and logic stays locked.
+             with self._lock:
+                 # Only clear if it hasn't been stopped manually in the meantime
+                 if self.current_task and self.current_task.id == task.id:
+                     print("[Controller] Emergency Voice Finished. Unlocking deactivation.")
+                     self.current_task = None
+                     self._update_firestore_state(None, Priority.EMERGENCY, 'EMERGENCY')
         # --- AUDIO OUTPUT END ---
 
     def _apply_queue_shift(self):

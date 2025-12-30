@@ -120,9 +120,10 @@ class AudioService:
             print(f"[AudioService] Piper Exception: {e}")
             return None
 
-    def play_announcement(self, intro_path, text, voice="female", zones=[]):
+    def play_announcement(self, intro_path, text, voice="female", zones=[], skip_stop=False):
         """Plays Intro + TTS on specific zones"""
-        self.stop()
+        if not skip_stop:
+            self.stop()
         print(f"[AudioService] Announcement: '{text}' -> Zones: {zones}")
         
         # 1. Generate TTS
@@ -460,6 +461,8 @@ class AudioService:
             # Linux: killall aplay? A bit aggressive but effective for "Stop" button.
             if self.os_type != "Windows":
                 # Kill aplay and play (SoX)
+                # Keep loop_siren process if we want overlap? 
+                # No, stop means stop EVERYTHING.
                 os.system("killall -q aplay")
                 os.system("killall -q play")
             

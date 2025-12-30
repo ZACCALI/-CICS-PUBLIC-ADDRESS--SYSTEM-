@@ -101,11 +101,15 @@ const Emergency = () => {
                                 <i className="material-icons mr-2">
                                     {isScriptPlaying ? 'campaign' : 'power_settings_new'}
                                 </i> 
-                                {isScriptPlaying ? 'BROADCASTING NOTICE...' : 'DEACTIVATE ALERT'}
+                                {isScriptPlaying ? 'VOICE ANNOUNCEMENT IN PROGRESS...' : 'DEACTIVATE EMERGENCY'}
                             </button>
-                            {isScriptPlaying && (
+                            {isScriptPlaying ? (
                                 <p className="text-xs text-red-600 mt-2 font-semibold animate-pulse">
-                                    Wait for voice announcement to complete...
+                                    AI Voice is speaking. Siren is looping...
+                                </p>
+                            ) : emergencyActive && (
+                                <p className="text-xs text-red-600 mt-2 font-semibold animate-pulse">
+                                    Siren is looping. System is locked...
                                 </p>
                             )}
                         </div>
