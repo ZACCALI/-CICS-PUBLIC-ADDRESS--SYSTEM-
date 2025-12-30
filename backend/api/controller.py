@@ -507,7 +507,32 @@ class PAController:
                 )
             else:
                 print("[Controller] Error: Text task has no content/message to speak.")
-            
+                
+        elif task.type == TaskType.BACKGROUND:
+            # --- BACKGROUND MUSIC PLAYBACK ---
+            filename = task.data.get('content')
+            if filename:
+                media_path = os.path.join("media", filename)
+                abs_media = os.path.abspath(media_path)
+                
+                if os.path.exists(abs_media):
+                    print(f"[Controller] Playing Background Music: {filename}")
+                    # Async Playback on All Zones (or specified)
+                    # For now, default to All Zones for music
+                    audio_service.play_background_music(abs_media, zones=['All Zones'])
+                    
+                    notification_service.create(
+                        "Music Started",
+                        f"Now playing: {filename}",
+                        type="info",
+                        target_user=task.data.get('user'),
+                        target_role="admin"
+                    )
+                else:
+                    print(f"[Controller] Error: Media file not found: {abs_media}")
+            else:
+                print("[Controller] Error: Background task missing content (filename).")
+
         elif task.type == TaskType.EMERGENCY:
              # UPDATED EMERGENCY SCRIPT
              script = ("Attention. This is an emergency alert. Please remain calm and follow the instructions carefully. "

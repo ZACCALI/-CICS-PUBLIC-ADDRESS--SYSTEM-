@@ -87,6 +87,7 @@ const Upload = () => {
   // Listeners
   useEffect(() => {
       const audio = audioRef.current;
+      audio.volume = 0; // STRICTLY MUTE LOCAL PLAYBACK (Plays on Pi)
       
       // These handlers are already defined above, but we need to attach them to the audio element.
       // Re-defining them here would create new functions on each render, which is not ideal.

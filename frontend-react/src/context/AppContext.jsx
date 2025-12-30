@@ -636,13 +636,18 @@ export const AppProvider = ({ children }) => {
           mediaStreamRef.current = stream;
           setBroadcastStream(stream);
 
-          // Audio Context for monitoring
+          
+          // Audio Context for monitoring (MUTED to prevent laptop playback)
           const AudioContext = window.AudioContext || window.webkitAudioContext;
           const audioCtx = new AudioContext();
           audioContextRef.current = audioCtx;
           
           const source = audioCtx.createMediaStreamSource(stream);
-          source.connect(audioCtx.destination);
+          const gainNode = audioCtx.createGain();
+          gainNode.gain.value = 0; // Strictly Mute Local Loopback
+          
+          source.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
 
           // 4. NEW: Wait for Chime (Simulated 5s)
           setBroadcastPreparing(true); // UI shows "PLAYING CHIME..."

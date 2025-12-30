@@ -446,10 +446,10 @@ const RealTime = () => {
              {broadcastActive ? 'Broadcasting live...' : 'Ready to broadcast'}
            </p>
            
-           <div className="mt-2 flex items-center text-xs text-gray-400 bg-white px-3 py-1 rounded-full border border-gray-100 relative z-10">
-             <i className="material-icons text-sm mr-1">info</i>
-             Audio monitoring enabled (You will hear yourself)
-           </div>
+             <div className="mt-2 flex items-center text-xs text-gray-500 bg-white px-3 py-1 rounded-full border border-gray-100 relative z-10">
+               <i className="material-icons text-sm mr-1">volume_off</i>
+               Local monitoring muted (Audio plays on PA System)
+             </div>
         </div>
       </div>
 

@@ -258,6 +258,18 @@ class AudioService:
         for t in threads:
             t.join()
 
+    def play_background_music(self, file_path: str, zones: list = None):
+        """Plays background music asynchronously on selected zones"""
+        self.stop()
+        target_cards = self._get_target_cards(zones)
+        
+        # Run in a separate thread to avoid blocking the Controller
+        def daemon_play():
+            self._play_multizone(None, file_path, target_cards)
+            
+        t = threading.Thread(target=daemon_play, daemon=True)
+        t.start()
+
     def _play_single_file_linux(self, file_path, card_id):
         """Plays a single file on a specific card"""
         device = f"plughw:{card_id},0"
@@ -273,8 +285,41 @@ class AudioService:
              except Exception as e:
                 print(f"[AudioService] Playback failed on card {card_id}: {e}")
 
-    # ... (Keep existing play_intro_async, play_file, stop, _run_command helper methods intact or simplified) ...
-    # Integrating critical existing helpers below for compatibility:
+    def _play_sequence_linux(self, intro, body, card_id):
+        """Plays Intro (Optional) -> Body on specific ALSA card using SoX (Preferred) or Aplay"""
+        
+        # Check for SoX (Lazy check or we could do in init)
+        has_sox = False
+        try:
+            subprocess.run(['which', 'play'], stdout=subprocess.DEVNULL, check=True)
+            has_sox = True
+        except: pass
+
+        device = f"plughw:{card_id},0"
+        
+        try:
+            if has_sox:
+                # SoX Volume Boost (1.1 = 110%)
+                env = os.environ.copy()
+                env["AUDIODEV"] = device
+                # play -v 1.1 file.wav
+                print(f"[AudioService] Playing via SoX (Vol: 1.1) on {device}")
+                # 1. Intro (Optional)
+                if intro:
+                    subprocess.run(['play', '-v', '1.1', intro], check=True, env=env)
+                # 2. Body
+                if body:
+                    subprocess.run(['play', '-v', '1.1', body], check=True, env=env)
+            else:
+                # Fallback to Aplay
+                print(f"[AudioService] Playing via Aplay (Standard Vol) on {device}")
+                if intro:
+                    subprocess.run(['aplay', '-D', device, intro], check=True)
+                if body:
+                    subprocess.run(['aplay', '-D', device, body], check=True)
+                
+        except Exception as e:
+            print(f"[AudioService] Linux Playback Error on Card {card_id}: {e}")
 
     def play_intro_async(self, file_path: str):
          """Plays intro asynchronously (Windows only visual supported, Linux fire-and-forget)"""
@@ -310,7 +355,9 @@ class AudioService:
                 self.current_process = None
             # Linux: killall aplay? A bit aggressive but effective for "Stop" button.
             if self.os_type != "Windows":
+                # Kill aplay and play (SoX)
                 os.system("killall -q aplay")
+                os.system("killall -q play")
 
     def _run_command(self, command):
         """Threaded command runner for Windows"""
@@ -328,5 +375,5 @@ class AudioService:
                     with self._lock:
                         if self.current_process == proc: self.current_process = None
         threading.Thread(target=target).start()
-
+        
 audio_service = AudioService()
