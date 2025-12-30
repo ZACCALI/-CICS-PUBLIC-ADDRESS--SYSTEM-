@@ -54,12 +54,13 @@ class AudioService:
         ]
         
         for p in paths:
-            if p.exists():
+            if p.exists() and p.is_file():
                 return str(p)
                 
         # Recursive fallback
         for path in self.base_dir.rglob(exe_name):
-            return str(path)
+            if path.is_file():
+                return str(path)
             
         return None
 
