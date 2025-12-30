@@ -311,7 +311,7 @@ class AudioService:
     def play_chime_sync(self, zones):
         """Plays the intro chime synchronously on specified zones"""
         target_cards = self._get_target_cards(zones)
-        intro_path = os.path.abspath(os.path.join("media", "intro.mp3"))
+        intro_path = os.path.abspath(os.path.join("system_sounds", "intro.mp3"))
         
         if not os.path.exists(intro_path):
             print(f"[AudioService] Chime skipped: {intro_path} not found")

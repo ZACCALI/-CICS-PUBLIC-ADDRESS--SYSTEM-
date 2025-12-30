@@ -29,9 +29,13 @@ const RealTime = () => {
   const canvasRef = useRef(null);
   const animationFrameRef = useRef(null);
   
-  const [textMessage, setTextMessage] = useState('');
-  const [voices, setVoices] = useState([]);
-  const [selectedVoice, setSelectedVoice] = useState('');
+  // Memoize Voices to avoid re-renders
+  const voices = React.useMemo(() => [
+      { name: 'AI Female (Human-like)', id: 'female' },
+      { name: 'AI Male (Human-like)', id: 'male' }
+  ], []);
+
+  const [selectedVoice, setSelectedVoice] = useState('female');
   const mediaStreamRef = useRef(null);
   
   const [showModal, setShowModal] = useState(false);
@@ -40,15 +44,7 @@ const RealTime = () => {
   // Debounce Lock
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Init Voices
-  useEffect(() => {
-     // Use Server-Side AI Voices
-     setVoices([
-         { name: 'AI Female (Human-like)', id: 'female' },
-         { name: 'AI Male (Human-like)', id: 'male' }
-     ]);
-     setSelectedVoice('female');
-  }, []);
+  // Remove old useEffect for voices
 
   const handleZoneChange = (zone) => {
     // Logic for Broadasting safety (Min 1 active)
@@ -491,19 +487,18 @@ const RealTime = () => {
         </div>
       </div>
 
-      {/* Zones */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h3 className="text-lg font-semibold text-gray-700 mb-4">Select Zones:</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {Object.keys(zones).map((label, idx) => (
-             <label key={idx} className="flex items-center space-x-3 p-3 border border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+             <label key={idx} className="flex items-center space-x-3 p-3 border border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md">
                <input 
                  type="checkbox" 
                  checked={zones[label]}
                  onChange={() => handleZoneChange(label)}
-                 className="w-5 h-5 text-primary rounded focus:ring-primary border-gray-300" 
+                 className="w-5 h-5 text-primary rounded focus:ring-primary border-gray-300 transition-colors" 
                />
-               <span className="text-gray-700 font-medium">{label}</span>
+               <span className="text-gray-700 font-medium truncate text-sm sm:text-base">{label}</span>
              </label>
           ))}
         </div>
