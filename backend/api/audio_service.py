@@ -155,7 +155,7 @@ class AudioService:
         if not cards: cards.add(0) # Fallback
         return list(cards)
 
-    def _play_multizone(self, intro, body, card_ids):
+    def _play_multizone(self, intro, body, card_ids, start_time=0):
         """Plays audio sequence on list of cards (Linux) or default (Windows)"""
         
         if self.os_type == "Windows":
@@ -167,17 +167,17 @@ class AudioService:
         # Linux / Raspberry Pi: Correct Multizone Logic
         threads = []
         for card_id in card_ids:
-            t = threading.Thread(target=self._play_sequence_linux, args=(intro, body, card_id))
+            t = threading.Thread(target=self._play_sequence_linux, args=(intro, body, card_id, start_time))
             threads.append(t)
             t.start()
         
         for t in threads:
             t.join()
 
-    def _play_sequence_linux(self, intro, body, card_id):
-        """Plays Intro -> Body on specific ALSA card using SoX (Preferred) or Aplay"""
+    def _play_sequence_linux(self, intro, body, card_id, start_time=0):
+        """Plays Intro (Optional) -> Body on specific ALSA card using SoX (Preferred) or Aplay"""
         
-        # Check for SoX (Lazy check or we could do in init)
+        # Check for SoX
         has_sox = False
         try:
             subprocess.run(['which', 'play'], stdout=subprocess.DEVNULL, check=True)
@@ -191,17 +191,25 @@ class AudioService:
                 # SoX Volume Boost (1.1 = 110%)
                 env = os.environ.copy()
                 env["AUDIODEV"] = device
-                # play -v 1.1 file.wav
-                print(f"[AudioService] Playing via SoX (Vol: 1.1) on {device}")
-                # 1. Intro
-                subprocess.run(['play', '-v', '1.1', intro], check=True, env=env)
+                print(f"[AudioService] Playing via SoX (Vol: 1.1, Seek: {start_time}s) on {device}")
+                
+                # 1. Intro (Optional)
+                if intro:
+                    subprocess.run(['play', '-v', '1.1', intro], check=True, env=env)
+                
                 # 2. Body
-                subprocess.run(['play', '-v', '1.1', body], check=True, env=env)
+                if body:
+                    cmd = ['play', '-v', '1.1', body]
+                    if start_time > 0:
+                        cmd.extend(['trim', str(start_time)])
+                    subprocess.run(cmd, check=True, env=env)
             else:
-                # Fallback to Aplay
-                print(f"[AudioService] Playing via Aplay (Standard Vol) on {device}")
-                subprocess.run(['aplay', '-D', device, intro], check=True)
-                subprocess.run(['aplay', '-D', device, body], check=True)
+                # Fallback to Aplay (Does not support precise trim easily)
+                print(f"[AudioService] Playing via Aplay on {device}")
+                if intro:
+                    subprocess.run(['aplay', '-D', device, intro], check=True)
+                if body:
+                    subprocess.run(['aplay', '-D', device, body], check=True)
                 
         except Exception as e:
             print(f"[AudioService] Linux Playback Error on Card {card_id}: {e}")
@@ -258,14 +266,14 @@ class AudioService:
         for t in threads:
             t.join()
 
-    def play_background_music(self, file_path: str, zones: list = None):
+    def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""
         self.stop()
         target_cards = self._get_target_cards(zones)
         
         # Run in a separate thread to avoid blocking the Controller
         def daemon_play():
-            self._play_multizone(None, file_path, target_cards)
+            self._play_multizone(None, file_path, target_cards, start_time=start_time)
             
         t = threading.Thread(target=daemon_play, daemon=True)
         t.start()
@@ -285,41 +293,6 @@ class AudioService:
              except Exception as e:
                 print(f"[AudioService] Playback failed on card {card_id}: {e}")
 
-    def _play_sequence_linux(self, intro, body, card_id):
-        """Plays Intro (Optional) -> Body on specific ALSA card using SoX (Preferred) or Aplay"""
-        
-        # Check for SoX (Lazy check or we could do in init)
-        has_sox = False
-        try:
-            subprocess.run(['which', 'play'], stdout=subprocess.DEVNULL, check=True)
-            has_sox = True
-        except: pass
-
-        device = f"plughw:{card_id},0"
-        
-        try:
-            if has_sox:
-                # SoX Volume Boost (1.1 = 110%)
-                env = os.environ.copy()
-                env["AUDIODEV"] = device
-                # play -v 1.1 file.wav
-                print(f"[AudioService] Playing via SoX (Vol: 1.1) on {device}")
-                # 1. Intro (Optional)
-                if intro:
-                    subprocess.run(['play', '-v', '1.1', intro], check=True, env=env)
-                # 2. Body
-                if body:
-                    subprocess.run(['play', '-v', '1.1', body], check=True, env=env)
-            else:
-                # Fallback to Aplay
-                print(f"[AudioService] Playing via Aplay (Standard Vol) on {device}")
-                if intro:
-                    subprocess.run(['aplay', '-D', device, intro], check=True)
-                if body:
-                    subprocess.run(['aplay', '-D', device, body], check=True)
-                
-        except Exception as e:
-            print(f"[AudioService] Linux Playback Error on Card {card_id}: {e}")
 
     def play_intro_async(self, file_path: str):
          """Plays intro asynchronously (Windows only visual supported, Linux fire-and-forget)"""

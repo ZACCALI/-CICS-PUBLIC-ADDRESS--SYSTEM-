@@ -24,6 +24,10 @@ class BroadcastAction(BaseModel):
     details: str
     timestamp: Optional[str] = None
 
+class SeekRequest(BaseModel):
+    user: str
+    time: float
+
 @real_time_announcements_router.post("/start")
 def start_broadcast(req: BroadcastRequest, user_token: dict = Depends(verify_token)):
     """
@@ -104,6 +108,16 @@ def complete_task(req: CompleteRequest, user_token: dict = Depends(verify_token)
     """
     controller.stop_task(req.task_id, user="System")
     return {"message": "Task Completed"}
+
+@real_time_announcements_router.post("/seek")
+def seek_music(req: SeekRequest, user_token: dict = Depends(verify_token)):
+    """
+    Requested by frontend to skip/seek in background music.
+    """
+    success = controller.seek_background_music(req.user, req.time)
+    if not success:
+        raise HTTPException(status_code=404, detail="No background music active to seek")
+    return {"message": "Seek successful"}
 
 @real_time_announcements_router.post("/log")
 def log_broadcast(action: BroadcastAction, user_token: dict = Depends(verify_token)):

@@ -18,6 +18,8 @@ const Upload = () => {
   const audioRef = useRef(new Audio());
   const startTimeRef = useRef(null);
   const logIdRef = useRef(null);
+  const isManuallyPaused = useRef(false);
+  const seekTimeoutRef = useRef(null);
 
   // Sync Log ID for callbacks
   useEffect(() => { logIdRef.current = currentLogId; }, [currentLogId]);
@@ -60,6 +62,7 @@ const Upload = () => {
       }
       setPlayingId(null);
       setCurrentTime(0);
+      isManuallyPaused.current = false;
   };
 
   const playNext = () => {
@@ -79,9 +82,24 @@ const Upload = () => {
   const handleSeek = (e) => {
       const time = parseFloat(e.target.value);
       setCurrentTime(time);
+      
       if (audioRef.current) {
           audioRef.current.currentTime = time;
       }
+
+      // Sync to Raspberry Pi with Debounce
+      if (seekTimeoutRef.current) clearTimeout(seekTimeoutRef.current);
+      seekTimeoutRef.current = setTimeout(async () => {
+          try {
+              console.log("[Upload] Syncing Seek to Pi:", time);
+              await api.post('/realtime/seek', {
+                  user: currentUser?.name || 'Admin',
+                  time: time
+              });
+          } catch (err) {
+              console.error("Seek sync failed:", err);
+          }
+      }, 300);
   };
 
   // Listeners
@@ -132,7 +150,7 @@ const Upload = () => {
           
           if (task.type === 'BACKGROUND' || task.priority === 10) {
               // It's Background Mode. If it's MY file (or generic background), RESUME.
-             if (isMyUser && audioRef.current.paused) {
+             if (isMyUser && audioRef.current.paused && !isManuallyPaused.current) {
                  console.log("[Resume Logic] Auto-Resuming Background Music for", currentUserName);
                  audioRef.current.play().catch(e => console.error("Resume failed", e));
              } else if (!isMyUser) {
@@ -193,7 +211,16 @@ const Upload = () => {
       if (playingId === id) {
           // Toggle Pause/Play
           if (audioRef.current.paused) {
+              isManuallyPaused.current = false;
               try {
+                  // If we were paused, we might need to tell the backend to restart at our CurrentTime
+                  await api.post('/realtime/start', {
+                      user: currentUser?.name || 'Admin',
+                      zones: ['All Zones'], 
+                      type: 'background',
+                      content: fileToPlay.name,
+                      start_time: audioRef.current.currentTime
+                  });
                   await audioRef.current.play();
               } catch (err) {
                   console.error("Playback failed:", err);
@@ -204,6 +231,7 @@ const Upload = () => {
               // OPTIMIZATION: Release Lock on Pause so others can use system
               console.log("[Upload] Pausing and Releasing Lock");
               audioRef.current.pause();
+              isManuallyPaused.current = true;
               try {
                   // Calls stop but keeps local PlayingId so we can resume
                   await api.post(`/realtime/stop?user=${encodeURIComponent(currentUser?.name || 'Admin')}&type=background`);

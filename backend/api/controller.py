@@ -87,6 +87,10 @@ class PAController:
         # Track Suspended Task (for Resume)
         self.suspended_task: Optional[Task] = None
 
+        # Background Music State
+        self.background_resume_time = 0
+        self.background_play_start: Optional[datetime] = None
+
         # Reset Logic on init to ensure clean state
         self._reset_state()
         
@@ -239,6 +243,19 @@ class PAController:
             self._update_firestore_state(None, Priority.IDLE, 'IDLE')
             
             # Stop Audio
+            if self.current_task and self.current_task.type == TaskType.BACKGROUND:
+                # Calculate final offset before stopping
+                if self.background_play_start:
+                    elapsed = (datetime.now() - self.background_play_start).total_seconds()
+                    self.background_resume_time += elapsed
+                    self.background_play_start = None
+                
+                # If we are hard stopping (Manual Stop), clear the resume point
+                # (Unless we want it to stay for next time? User said "resume where it stops")
+                # But "Stop" button usually means stop completely.
+                # However, "Interrupted" is different. 
+                # Let's keep resume_time until a NEW background task is started.
+            
             audio_service.stop()
             
             # Application of Time Shift (System became IDLE)
@@ -282,6 +299,23 @@ class PAController:
             if self.current_task and self.current_task.priority == Priority.EMERGENCY:
                  return self.current_task.data.get('user')
             return None
+
+    def seek_background_music(self, user: str, time_seconds: float):
+        """Forces the current background music to seek to a specific time"""
+        with self._lock:
+            if not self.current_task or self.current_task.type != TaskType.BACKGROUND:
+                print("[Controller] Seek Denied: No Background Music playing")
+                return False
+            
+            # Update resume time and restart
+            self.background_resume_time = time_seconds
+            self.background_play_start = None # Reset start tracking
+            
+            # Re-start the same task with new offset
+            task = self.current_task
+            audio_service.stop()
+            self._start_task(task)
+            return True
 
     def play_realtime_chunk(self, audio_base64: str):
         """Decodes RAW PCM chunks, wraps in WAV header, and plays immediately"""
@@ -367,6 +401,14 @@ class PAController:
         elif self.current_task.type == TaskType.BACKGROUND:
             # Soft Stop: Suspend
             print(f"  -> [SUSPEND] Suspending Background Task {self.current_task.id} for {new_priority}")
+            
+            # Save offset correctly
+            if self.background_play_start:
+                elapsed = (datetime.now() - self.background_play_start).total_seconds()
+                self.background_resume_time += elapsed
+                print(f"  -> Saved resume offset: {self.background_resume_time}s")
+                self.background_play_start = None
+
             self.suspended_task = self.current_task
             self.current_task = None
             # Do NOT mark COMPLETED. State remains valid in object.
@@ -517,9 +559,18 @@ class PAController:
                 
                 if os.path.exists(abs_media):
                     print(f"[Controller] Playing Background Music: {filename}")
+                    
+                    # Determine Start Offset
+                    # 1. Check if Task Data has 'start_time' (explicit seek)
+                    # 2. Otherwise use saved 'background_resume_time'
+                    start_offset = task.data.get('start_time', self.background_resume_time)
+                    print(f"  -> Offset: {start_offset}s")
+                    
+                    # Track when we actually started playing
+                    self.background_play_start = datetime.now()
+                    
                     # Async Playback on All Zones (or specified)
-                    # For now, default to All Zones for music
-                    audio_service.play_background_music(abs_media, zones=['All Zones'])
+                    audio_service.play_background_music(abs_media, zones=['All Zones'], start_time=start_offset)
                     
                     notification_service.create(
                         "Music Started",
