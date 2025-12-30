@@ -17,6 +17,8 @@ class AudioService:
         self.stream_process = None
         self._lock = threading.Lock()
         self.stream_lock = threading.Lock()
+        self.proc_lock = threading.Lock()
+        self.active_processes = []
         
         # SIREN STATE
         self._siren_active = False
@@ -39,6 +41,15 @@ class AudioService:
         
         if not self.piper_exe:
             print("[AudioService] Warning: Piper TTS not found. Using System Fallback.")
+
+    def _track_process(self, proc):
+        with self.proc_lock:
+            self.active_processes.append(proc)
+
+    def _untrack_process(self, proc):
+        with self.proc_lock:
+            if proc in self.active_processes:
+                self.active_processes.remove(proc)
 
     def _load_zones_config(self):
         """Loads zone mapping from zones_config.json"""
@@ -214,21 +225,27 @@ class AudioService:
         
         try:
             if has_sox:
-                # SoX Volume Boost (1.0 = 100%)
+                # SoX Volume Boost (1.2 = 120%)
                 env = os.environ.copy()
                 env["AUDIODEV"] = device
-                print(f"[AudioService] Playing via SoX (Vol: 1.0, Seek: {start_time}s) on {device}")
+                print(f"[AudioService] Playing via SoX (Vol: 1.2, Seek: {start_time}s) on {device}")
                 
                 # 1. Intro (Optional)
                 if intro:
-                    subprocess.run(['play', '-v', '1.0', intro], check=True, env=env)
+                    p = subprocess.Popen(['play', '-v', '1.2', intro], env=env)
+                    self._track_process(p)
+                    p.wait()
+                    self._untrack_process(p)
                 
                 # 2. Body
                 if body:
-                    cmd = ['play', '-v', '1.0', body]
+                    cmd = ['play', '-v', '1.2', body]
                     if start_time > 0:
                         cmd.extend(['trim', str(start_time)])
-                    subprocess.run(cmd, check=True, env=env)
+                    p = subprocess.Popen(cmd, env=env)
+                    self._track_process(p)
+                    p.wait()
+                    self._untrack_process(p)
             else:
                 # Fallback to Aplay (Does not support precise trim easily)
                 print(f"[AudioService] Playing via Aplay on {device}")
@@ -387,8 +404,12 @@ class AudioService:
                         try:
                             # Use variable volume
                             vol = self._siren_volume
-                            subprocess.run(['play', '-q', '-v', str(vol), '-n', 'synth', '5', 'sine', '600:1200'], 
+                            # Shorten burst to 1 second for faster volume response
+                            p = subprocess.Popen(['play', '-q', '-v', str(vol), '-n', 'synth', '1', 'sine', '600:1200'], 
                                            env=env, stderr=subprocess.DEVNULL)
+                            self._track_process(p)
+                            p.wait()
+                            self._untrack_process(p)
                         except: pass
 
                     t = threading.Thread(target=play_on_card, args=(card_id,))
@@ -489,11 +510,20 @@ class AudioService:
             self._siren_stop_event.set()
             self._siren_active = False
             
-            # Linux: killall aplay? A bit aggressive but effective for "Stop" button.
+            # 1. Direct Process Termination
+            with self.proc_lock:
+                for proc in self.active_processes:
+                    try:
+                        print(f"[AudioService] Terminating process {proc.pid}")
+                        proc.terminate()
+                        # Wait briefly for termination
+                        try: proc.wait(timeout=0.2)
+                        except: proc.kill()
+                    except: pass
+                self.active_processes.clear()
+
+            # 2. Linux Fallback: killall aplay? A bit aggressive but effective for "Stop" button.
             if self.os_type != "Windows":
-                # Kill aplay and play (SoX)
-                # Keep loop_siren process if we want overlap? 
-                # No, stop means stop EVERYTHING.
                 os.system("killall -q aplay")
                 os.system("killall -q play")
             
