@@ -153,6 +153,15 @@ export const AuthProvider = ({ children }) => {
     const user = auth.currentUser;
     if (user) {
         try {
+            // 0. Stop Session Audio (Voice/Text/Music/Emergency)
+            // But let Schedules continue.
+            const userName = user.displayName || 'Admin';
+            try {
+                await api.post(`/realtime/stop-session?user=${encodeURIComponent(userName)}`);
+            } catch (authStopErr) {
+                console.error("Failed to stop session audio on logout:", authStopErr);
+            }
+
             // 1. Set offline
             await updateDoc(doc(db, "users", user.uid), {
                 isOnline: false

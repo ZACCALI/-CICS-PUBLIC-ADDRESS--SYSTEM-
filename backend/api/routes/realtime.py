@@ -98,6 +98,14 @@ def stop_broadcast(user: str, type: str = "voice", task_id: Optional[str] = None
     controller.stop_task(task_id, task_type=target_type, user=user)
     return {"message": "Broadcast Stopped"}
 
+@real_time_announcements_router.post("/stop-session")
+def stop_session_audio(user: str, user_token: dict = Depends(verify_token)):
+    """
+    Stops current audio if it's NOT a schedule. Called on logout.
+    """
+    controller.stop_session_task(user)
+    return {"message": "Session Audio Stopped"}
+
 class CompleteRequest(BaseModel):
     task_id: str
 

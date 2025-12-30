@@ -216,6 +216,21 @@ class PAController:
                 print(f"[Controller] Denied: Busy (Current: {current_pri}, New: {new_task.priority})")
                 return False
 
+    def stop_session_task(self, user: str):
+        """Used during logout to stop personal audio (Music, Voice, Text, Emergency)"""
+        with self._lock:
+            if not self.current_task:
+                return
+            
+            # NEVER stop schedules on logout
+            if self.current_task.type == TaskType.SCHEDULE:
+                print(f"[Controller] Logout: Keeping Schedule {self.current_task.id} active.")
+                return
+
+            print(f"[Controller] Logout: Stopping {self.current_task.type} for session end.")
+            # For logout, we use 'System' as the stop requester to allow override
+            self.stop_task(None, user='System')
+
     def stop_task(self, task_id: str, task_type: str = None, user: str = None):
         """Called to manually stop a task (e.g., Stop Broadcast, Clear Emergency)"""
         with self._lock:
@@ -227,28 +242,24 @@ class PAController:
                 print(f"[Controller] Denied Stop: ID Mismatch ({task_id} vs {self.current_task.id})")
                 return
 
-            # Anti-Zombie: Require ID for Realtime Tasks to prevent race conditions
-            # (e.g. Frontend "Stop" from previous session killing new session)
-            # Anti-Zombie: Require ID for Realtime Tasks to prevent race conditions
-            # (e.g. Frontend "Stop" from previous session killing new session)
+            # ADMIN OVERRIDE & ID PROTECTION
             if not task_id:
-                 # --- NEW PROTECTION START ---
-                 # If no ID is provided (e.g. generic 'handleUnload' stop), 
-                 # STRICTLY PROTECT persistent tasks (Schedule, Emergency).
-                 if self.current_task.type in [TaskType.SCHEDULE, TaskType.EMERGENCY]:
-                     print(f"[Controller] Denied Generic Stop: Cannot kill {self.current_task.type} without Task ID.")
-                     return
-                 # --- NEW PROTECTION END ---
+                 # Check if user is an Admin (allowing bypass of ID requirement)
+                 is_admin = user in ['System', 'System Admin', 'Admin', 'admin']
+                 
+                 # Schedules are protected unless explicit ID is given?
+                 # No, schedules usually only stop via ID or completion.
+                 if self.current_task.type == TaskType.SCHEDULE and not is_admin:
+                      print(f"[Controller] Denied Generic Stop: Cannot kill Schedule without Task ID.")
+                      return
 
-                 # RECOVERY: If ID is missing, but the User requesting stop matches the Task Owner, ALLOW IT.
-                 current_owner = self.current_task.data.get('user')
-                 if user and current_owner and user == current_owner:
-                     print(f"[Controller] ALLOWING STOP (Recovery): User '{user}' matches Task Owner")
-                 elif user in ['System', 'System Admin', 'Admin']: # Admin Override
-                     print(f"[Controller] ALLOWING STOP (Admin Override): User '{user}'")
-                 else:
-                     print(f"[Controller] Denied Stop: Missing Task ID for Realtime Task (Requester: {user}, Owner: {current_owner})")
-                     return
+                 # Emergency PROTECTION (Normal users need ID, Admins don't)
+                 if self.current_task.type == TaskType.EMERGENCY and not is_admin:
+                      # Check if history user matches (Recovery)
+                      current_owner = self.current_task.data.get('user')
+                      if user != current_owner:
+                          print(f"[Controller] Denied Stop: Emergency requires ID or Admin context.")
+                          return
 
             print(f"[Controller] Stopping Task: {self.current_task.id}")
             

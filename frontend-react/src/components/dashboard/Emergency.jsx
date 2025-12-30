@@ -28,8 +28,10 @@ const Emergency = () => {
   // Check if history exists and has items
   const lastEmergency = emergencyHistory && emergencyHistory.length > 0 ? emergencyHistory[0] : null;
   const activator = lastEmergency ? lastEmergency.user : 'Unknown';
-  // Check ownership
+  // Check ownership or Admin role
+  const isAdmin = currentUser?.role === 'admin';
   const isOwner = (currentUser?.name || 'Admin') === activator;
+  const canDeactivate = isOwner || isAdmin;
 
   const handleActivate = () => {
     if (!currentUser || !currentUser.name) {
@@ -47,24 +49,12 @@ const Emergency = () => {
   // Filter History
   const filteredHistory = emergencyHistory.filter(item => {
       const lowerSearch = searchTerm.toLowerCase();
-      // Only show my history if not owner? No, usually admin sees all? 
-      // The original code had: emergencyHistory.filter(item => item.user === currentUser?.name) for the CLEAR button.
-      // But the map showed ALL items: {emergencyHistory.filter(item => item.user === currentUser?.name).map... WAIT
-      // Line 132 in original: emergencyHistory.filter(item => item.user === currentUser?.name).map(...)
-      // Does it only show MY history?
-      // Let's check the original code again.
-      // Line 132: {emergencyHistory.filter(item => item.user === currentUser?.name).map((item) => (
-      // This means the user currently ONLY sees their own history? 
-      // Or was that a mistake in the previous code? 
-      // The CLEAR button (Line 123) is conditional: .filter(item => item.user === currentUser?.name).length > 0
-      // But the LIST itself (Line 132) also filters!
-      // If the requirement is "Find anything", maybe I should just keep the existing logic but add search to it.
       
       const isMine = item.user === currentUser?.name;
-      // If the original intention was to only show user's own history, I should respect that, OR fix it if it's a bug.
-      // Assuming it's intended for now (User Dashboard).
-      
-      if (!isMine) return false; 
+      const isAdmin = currentUser?.role === 'admin';
+
+      // Admins see all history, Users see their own
+      if (!isAdmin && !isMine) return false; 
 
       return !searchTerm || 
              item.action.toLowerCase().includes(lowerSearch) ||
@@ -74,13 +64,11 @@ const Emergency = () => {
 
   return (
     <div className="space-y-6">
-      {/* ... Top Section Omitted ... */}
       <h2 className="text-2xl font-bold text-red-600 flex items-center">
         <i className="material-icons mr-3">emergency</i> Emergency Alert
       </h2>
-
       <div className={`border-l-4 rounded-lg p-6 shadow-sm transition-colors duration-500 ${emergencyActive ? 'bg-red-100 border-red-600 animate-pulse' : 'bg-red-50 border-red-500'}`}>
-         {/* ... Alert Content Omitted ... */}
+         {/* ... Alert Content ... */}
          <div className="flex items-start">
            <div className="flex-shrink-0">
              <i className="material-icons text-red-500 text-3xl">warning</i>
@@ -98,8 +86,8 @@ const Emergency = () => {
              </p>
              <div className="mt-6">
                 {emergencyActive ? (
-                    isOwner ? (
-                        /* OWNER: Allow Deactivation */
+                    canDeactivate ? (
+                        /* OWNER or ADMIN: Allow Deactivation */
                         <div className="flex flex-col items-center">
                             <button 
                                 onClick={() => {
@@ -132,7 +120,7 @@ const Emergency = () => {
                                 <i className="material-icons mr-2">lock</i> EMERGENCY ONGOING
                             </button>
                             <p className="text-center text-xs text-red-800 mt-2 font-semibold">
-                                Protected: Only {activator} can deactivate.
+                                Protected: Only {activator} (or an Admin) can deactivate.
                             </p>
                         </div>
                     )
