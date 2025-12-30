@@ -11,26 +11,35 @@ const Upload = () => {
   
   // Audio Player State
   const [playingId, setPlayingId] = useState(null);
-  const [isPaused, setIsPaused] = useState(false); // Track Pause State
   const [currentLogId, setCurrentLogId] = useState(null); 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   
   const audioRef = useRef(new Audio());
-  // ... other refs ...
+  const startTimeRef = useRef(null);
+  const logIdRef = useRef(null);
+  const isManuallyPaused = useRef(false);
+  const seekTimeoutRef = useRef(null);
+  const isProcessing = useRef(false);
 
-  // ... (Lines 45-67 omitted for brevity in call) ...
+  // Sync Log ID for callbacks
+  useEffect(() => { logIdRef.current = currentLogId; }, [currentLogId]);
 
+  // Format Helper
+  const formatTime = (time) => {
+    if (!time || isNaN(time)) return "0:00";
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
+  };
 
-
-
-
+  // Player Handlers
   const handleTimeUpdate = () => {
-    setCurrentTime(audioRef.current.currentTime);
+      setCurrentTime(audioRef.current.currentTime);
   };
 
   const handleLoadedMetadata = () => {
-    setDuration(audioRef.current.duration);
+      setDuration(audioRef.current.duration);
   };
 
   const handleEnded = () => {
@@ -53,7 +62,6 @@ const Upload = () => {
           audioRef.current.currentTime = 0;
       }
       setPlayingId(null);
-      setIsPaused(false);
       setCurrentTime(0);
       isManuallyPaused.current = false;
   };
@@ -100,17 +108,12 @@ const Upload = () => {
       const audio = audioRef.current;
       audio.volume = 0; // STRICTLY MUTE LOCAL PLAYBACK (Plays on Pi)
       
-      const onPlay = () => setIsPaused(false);
-      const onPause = () => setIsPaused(true);
-
       // These handlers are already defined above, but we need to attach them to the audio element.
       // Re-defining them here would create new functions on each render, which is not ideal.
       // Instead, we attach the top-level handlers.
       audio.addEventListener('timeupdate', handleTimeUpdate);
       audio.addEventListener('loadedmetadata', handleLoadedMetadata);
       audio.addEventListener('ended', handleEnded);
-      audio.addEventListener('play', onPlay);
-      audio.addEventListener('pause', onPause);
       
       const handleStopGlobal = () => {
           // INTERRUPTION LOGIC: Just pause, don't clear state (so we can resume)
@@ -125,8 +128,6 @@ const Upload = () => {
           audio.removeEventListener('timeupdate', handleTimeUpdate);
           audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
           audio.removeEventListener('ended', handleEnded);
-          audio.removeEventListener('play', onPlay);
-          audio.removeEventListener('pause', onPause);
           window.removeEventListener('stop-all-audio', handleStopGlobal);
           audio.pause();
       };
@@ -178,7 +179,6 @@ const Upload = () => {
 
   // Main Play Function
   const playSound = async (id) => {
-      console.log("[Upload] playSound requested for", id, "Processing:", isProcessing.current);
       if (emergencyActive) {
           setErrorMessage("Emergency Alert is currently active. Audio playback is disabled.");
           setShowErrorModal(true);
@@ -195,15 +195,20 @@ const Upload = () => {
 
       if (playingId === id) {
           // Toggle Pause/Play
-          try {
-              if (audioRef.current.paused) {
-                  // Play
-                  isManuallyPaused.current = false;
-                  // ... (API calls) ...
+          if (audioRef.current.paused) {
+              console.log("[Upload] Manual Play Triggered");
+              isManuallyPaused.current = false;
+              try {
+                  // Explicitly tell backend to start (with current offset if any)
                   const currentSecs = audioRef.current.currentTime || 0;
-                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
+                  console.log(`[Upload] Starting on Pi at ${currentSecs}s`);
                   
+                  // Calculate active zones
+                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+                  // If no zones selected (and not All Zones), default to All Zones to ensure playback? 
+                  // Or respect silence? Let's default to All Zones if nothing selected to avoid confusion.
+                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
+
                   await api.post('/realtime/start', {
                       user: currentUser?.name || 'Admin',
                       zones: targetZones, 
@@ -212,27 +217,38 @@ const Upload = () => {
                       start_time: currentSecs
                   });
                   await audioRef.current.play();
-              } else {
-                  // Pause
-                  isManuallyPaused.current = true;
-                  audioRef.current.pause();
-                  await api.post(`/realtime/stop?user=${encodeURIComponent(currentUser?.name || 'Admin')}&type=background`);
+              } catch (err) {
+                  console.error("Playback failed:", err);
+                  setErrorMessage("Playback failed: " + err.message);
+                  setShowErrorModal(true);
+                  isManuallyPaused.current = true; // Safety
               }
-          } catch (err) {
-              console.error("Playback toggle failed:", err);
-              // setErrorMessage("Playback failed: " + err.message); // Optional
+          } else {
+              console.log("[Upload] Manual Pause Triggered");
+              isManuallyPaused.current = true;
+              audioRef.current.pause();
+              try {
+                  await api.post(`/realtime/stop?user=${encodeURIComponent(currentUser?.name || 'Admin')}&type=background`);
+              } catch (e) {
+                  console.warn("Failed to notify backend of pause", e);
+              }
           }
       } else {
           // Play New
-          try {
-              if (fileToPlay.url) {
-                 const fullUrl = `${api.defaults.baseURL}${fileToPlay.url}`;
-                 audioRef.current.src = fullUrl;
+          // New: Use 'url' from backend (Static File)
+          if (fileToPlay.url) {
+             const fullUrl = `${api.defaults.baseURL}${fileToPlay.url}`;
+             console.log("Playing from URL:", fullUrl);
+             audioRef.current.src = fullUrl;
+             
+             try {
                  setPlayingId(id);
                  startTimeRef.current = Date.now();
                  isManuallyPaused.current = false;
                  setCurrentTime(0);
 
+                 // Tell backend to start FRESH
+                 // Calculate active zones
                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
 
@@ -246,23 +262,29 @@ const Upload = () => {
                  
                  await audioRef.current.play();
                  
-                  // Log
-                 logActivity(
-                      currentUser?.name || 'Admin',
-                      'Music Session',
-                      'Music',
-                      `${fileToPlay.name} (Start: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
-                 ).then(id => setCurrentLogId(id)).catch(e => console.error(e));
-
-              } else if (fileToPlay.content) {
-                  audioRef.current.src = fileToPlay.content;
-                  await audioRef.current.play();
-                  setPlayingId(id);
-              }
-          } catch (err) {
-              console.error("Playback failed:", err);
-              setErrorMessage("Could not play audio: " + err.message);
-              setShowErrorModal(true);
+                 // Log activity
+             try {
+                 const newLogId = await logActivity(
+                     currentUser?.name || 'Admin',
+                     'Music Session',
+                     'Music',
+                     `${fileToPlay.name} (Start: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                 );
+                 setCurrentLogId(newLogId);
+             } catch (logErr) {
+                 console.error("Logging failed", logErr);
+             }
+             } catch (err) {
+                 console.error("Playback load failed:", err);
+                 setErrorMessage("Could not play audio: " + err.message);
+                 setShowErrorModal(true);
+             }
+          } else if (fileToPlay.content) {
+              // Fallback for legacy local files (if any persist in cache)
+              audioRef.current.src = fileToPlay.content;
+              // ... (Start play)
+              await audioRef.current.play();
+              setPlayingId(id);
           }
       }
       isProcessing.current = false;
@@ -414,11 +436,10 @@ const Upload = () => {
         <h3 className="text-lg font-semibold text-gray-700 mb-4">Select Target Zones:</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {Object.keys(zones).map((label, idx) => (
-             <label key={idx} className={`flex items-center space-x-3 p-3 border border-gray-100 rounded-lg transition-all duration-200 shadow-sm ${playingId && !isPaused ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50 cursor-pointer active:scale-95 hover:shadow-md'}`}>
+             <label key={idx} className="flex items-center space-x-3 p-3 border border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md">
                <input 
                  type="checkbox" 
                  checked={zones[label]}
-                 disabled={!!playingId && !isPaused}
                  onChange={() => {
                     if (label === 'All Zones') {
                         const newValue = !zones['All Zones'];
@@ -563,17 +584,11 @@ const Upload = () => {
              <div className="space-y-2 max-h-[400px] overflow-y-auto mb-4 pr-1">
                   {filteredFiles.map((file) => {
                       const isLocked = systemState?.active_task && systemState.active_task.data?.user !== (currentUser?.name || 'Admin');
-                      // DEBUG LOGS
-                      // console.log(`[Upload] File: ${file.name}, Locked: ${isLocked}, TaskUser: ${systemState?.active_task?.data?.user}, Me: ${currentUser?.name}`);
-
                       return (
                       <div 
                          key={file.id} 
                          className={`flex items-center justify-between p-3 rounded-lg transition-colors group ${isLocked ? 'cursor-not-allowed opacity-60 bg-gray-50' : 'cursor-pointer'} ${playingId === file.id ? 'bg-primary/5 border border-primary/20' : (!isLocked && 'hover:bg-gray-50 border border-transparent')} ${selectedFiles.has(file.id) ? 'bg-blue-50/50' : ''}`}
-                         onClick={() => {
-                             console.log(`[Upload] Clicked ${file.name}. Locked? ${isLocked}`);
-                             if (!isLocked) playSound(file.id);
-                         }}
+                         onClick={() => !isLocked && playSound(file.id)}
                       >
                           <div className="flex items-center overflow-hidden flex-1">
                               {/* Checkbox */}
