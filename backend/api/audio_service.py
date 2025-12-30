@@ -324,8 +324,8 @@ class AudioService:
                 try:
                     env = os.environ.copy()
                     env["AUDIODEV"] = device
-                    # Play chime at slightly higher volume for attention (Trimmed for speed)
-                    subprocess.run(['play', '-q', '-v', '1.0', intro_path, 'trim', '0', '1.5'], env=env, stderr=subprocess.DEVNULL)
+                    # Play chime at slightly higher volume for attention
+                    subprocess.run(['play', '-q', '-v', '1.0', intro_path], env=env, stderr=subprocess.DEVNULL)
                 except:
                     # Fallback
                     subprocess.run(['aplay', '-D', device, intro_path], stderr=subprocess.DEVNULL)
@@ -334,8 +334,9 @@ class AudioService:
             threads.append(t)
             t.start()
 
-        for t in threads:
-            t.join()
+        # We no longer join threads here to allow the Controller to return immediately
+        # while the chime plays in the background.
+        pass
 
     def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""

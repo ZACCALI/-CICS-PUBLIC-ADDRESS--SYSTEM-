@@ -649,9 +649,9 @@ export const AppProvider = ({ children }) => {
           source.connect(gainNode);
           gainNode.connect(audioCtx.destination);
 
-          // 4. NEW: Wait for Chime (Simulated 5s)
+          // 4. NEW: Wait for Chime (Reduced to 1s for better UX)
           setBroadcastPreparing(true); // UI shows "PLAYING CHIME..."
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           setBroadcastPreparing(false);
 
           setBroadcastActive(true); // UI shows "STOP BROADCAST"
