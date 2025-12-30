@@ -20,6 +20,7 @@ const Upload = () => {
   const logIdRef = useRef(null);
   const isManuallyPaused = useRef(false);
   const seekTimeoutRef = useRef(null);
+  const isProcessing = useRef(false);
 
   // Sync Log ID for callbacks
   useEffect(() => { logIdRef.current = currentLogId; }, [currentLogId]);
@@ -183,28 +184,13 @@ const Upload = () => {
           setShowErrorModal(true);
           return;
       }
+      if (isProcessing.current) return;
+      isProcessing.current = true;
       
       const fileToPlay = files.find(f => f.id === id);
-      if (!fileToPlay) return;
-
-      // Check Backend Lock First
-      if (playingId !== id || audioRef.current.paused) {
-          try {
-              console.log("[Upload] Requesting playback lock for:", fileToPlay.name);
-              await api.post('/realtime/start', {
-                  user: currentUser?.name || 'Admin',
-                  zones: ['All Zones'], 
-                  type: 'background',
-                  content: fileToPlay.name
-              });
-          } catch (err) {
-              if (err.response && err.response.status === 409) {
-                  setErrorMessage("System Busy: Another broadcast or audio is playing.");
-                  setShowErrorModal(true);
-                  return;
-              }
-              console.error("Lock Request Failed:", err);
-          }
+      if (!fileToPlay) {
+          isProcessing.current = false;
+          return;
       }
 
       if (playingId === id) {
@@ -243,7 +229,6 @@ const Upload = () => {
           }
       } else {
           // Play New
-          // Play New
           // New: Use 'url' from backend (Static File)
           if (fileToPlay.url) {
              const fullUrl = `${api.defaults.baseURL}${fileToPlay.url}`;
@@ -251,7 +236,6 @@ const Upload = () => {
              audioRef.current.src = fullUrl;
              
              try {
-                 await audioRef.current.play();
                  setPlayingId(id);
                  startTimeRef.current = Date.now();
                  isManuallyPaused.current = false;
@@ -265,6 +249,8 @@ const Upload = () => {
                      content: fileToPlay.name,
                      start_time: 0
                  });
+                 
+                 await audioRef.current.play();
                  
                  // Log activity
              try {
@@ -291,6 +277,7 @@ const Upload = () => {
               setPlayingId(id);
           }
       }
+      isProcessing.current = false;
   };
  
   // Modal

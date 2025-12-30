@@ -190,6 +190,16 @@ class PAController:
 
             # Logic: Higher Priority WINS OR (Equal Priority AND Same User WINS)
             if new_task.priority > current_pri or (new_task.priority == current_pri and is_same_user):
+                
+                # IDEMPOTENCY CHECK: If it's the SAME background track already playing, IGNORE.
+                if self.current_task and self.current_task.type == TaskType.BACKGROUND and new_task.type == TaskType.BACKGROUND:
+                    if self.current_task.data.get('content') == new_task.data.get('content'):
+                        # Check start_time to distinguish between "Seek" and "Redundant Play"
+                        # If start_time is 0, it's usually a redundant "New Play" click.
+                        if new_task.data.get('start_time') == 0:
+                            print(f"[Controller] Ignoring redundant start request for: {new_task.data.get('content')}")
+                            return True # Success (but do nothing)
+
                 # FRESH START: If it's a new Background Music request, reset the resume offset
                 if new_task.type == TaskType.BACKGROUND:
                     print("[Controller] Resetting Background Resume Point for New Request.")
