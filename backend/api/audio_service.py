@@ -175,13 +175,34 @@ class AudioService:
             t.join()
 
     def _play_sequence_linux(self, intro, body, card_id):
-        """Plays Intro -> Body on specific ALSA card"""
-        device = f"plughw:{card_id},0"
+        """Plays Intro -> Body on specific ALSA card using SoX (Preferred) or Aplay"""
+        
+        # Check for SoX (Lazy check or we could do in init)
+        has_sox = False
         try:
-            # 1. Intro
-            subprocess.run(['aplay', '-D', device, intro], check=True)
-            # 2. Body
-            subprocess.run(['aplay', '-D', device, body], check=True)
+            subprocess.run(['which', 'play'], stdout=subprocess.DEVNULL, check=True)
+            has_sox = True
+        except: pass
+
+        device = f"plughw:{card_id},0"
+        
+        try:
+            if has_sox:
+                # SoX Volume Boost (3.0 = 300%)
+                env = os.environ.copy()
+                env["AUDIODEV"] = device
+                # play -v 3.0 file.wav
+                print(f"[AudioService] Playing via SoX (Vol: 3.0) on {device}")
+                # 1. Intro
+                subprocess.run(['play', '-v', '3.0', intro], check=True, env=env)
+                # 2. Body
+                subprocess.run(['play', '-v', '3.0', body], check=True, env=env)
+            else:
+                # Fallback to Aplay
+                print(f"[AudioService] Playing via Aplay (Standard Vol) on {device}")
+                subprocess.run(['aplay', '-D', device, intro], check=True)
+                subprocess.run(['aplay', '-D', device, body], check=True)
+                
         except Exception as e:
             print(f"[AudioService] Linux Playback Error on Card {card_id}: {e}")
 
