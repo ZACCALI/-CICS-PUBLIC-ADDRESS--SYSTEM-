@@ -21,19 +21,6 @@ const Upload = () => {
 
   // ... (Lines 45-67 omitted for brevity in call) ...
 
-  const stopPlayback = async () => {
-      // ...
-      if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-      }
-      setPlayingId(null);
-      setIsPaused(false); // Reset
-      setCurrentTime(0);
-      isManuallyPaused.current = false;
-  };
-
-  // ...
 
 
 
