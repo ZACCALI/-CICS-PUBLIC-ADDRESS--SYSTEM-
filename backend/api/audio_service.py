@@ -18,6 +18,12 @@ class AudioService:
         self._lock = threading.Lock()
         self.stream_lock = threading.Lock()
         
+        # SIREN STATE
+        self._siren_active = False
+        self._siren_volume = 0.3
+        self._siren_thread = None
+        self._siren_stop_event = threading.Event()
+        
         # Paths
         self.root_dir = Path(__file__).resolve().parent.parent
         self.base_dir = self.root_dir / "piper_tts"
@@ -359,15 +365,18 @@ class AudioService:
 
     def play_siren(self, zones=None):
         """Plays a synthetic emergency siren on specified zones (Pi Speakers)"""
-        self.stop()
-        target_cards = self._get_target_cards(zones)
+        with self._lock:
+            if self._siren_active:
+                return # Already playing
+            self._siren_active = True
+            self._siren_stop_event.clear()
+            self._siren_volume = 0.2 # Default low start
         
+        target_cards = self._get_target_cards(zones)
         print(f"[AudioService] Starting Emergency Siren on cards: {target_cards}")
         
         def run_siren():
-            # Create a dedicated process for the siren sweep
-            # We use a loop in a thread to keep it going
-            while True:
+            while not self._siren_stop_event.is_set():
                 threads = []
                 for card_id in target_cards:
                     def play_on_card(cid):
@@ -376,7 +385,9 @@ class AudioService:
                         env["AUDIODEV"] = device
                         # SoX Synth: 5 second sweep from 600Hz to 1200Hz
                         try:
-                            subprocess.run(['play', '-q', '-n', 'synth', '5', 'sine', '600:1200'], 
+                            # Use variable volume
+                            vol = self._siren_volume
+                            subprocess.run(['play', '-q', '-v', str(vol), '-n', 'synth', '5', 'sine', '600:1200'], 
                                            env=env, stderr=subprocess.DEVNULL)
                         except: pass
 
@@ -386,17 +397,32 @@ class AudioService:
                 
                 for t in threads:
                     t.join()
-                
-                # Check if we should stop
-                with self._lock:
-                    if not self.current_process: # Threading reuse of current_process flag
-                        break
+            
+            print("[AudioService] Siren thread exiting.")
 
-        # Start the siren loop thread
-        siren_thread = threading.Thread(target=run_siren, daemon=True)
+        self._siren_thread = threading.Thread(target=run_siren, daemon=True)
+        self._siren_thread.start()
+
+    def set_siren_volume(self, volume: float):
+        """Directly sets the siren volume (0.0 to 1.0)"""
         with self._lock:
-            self.current_process = siren_thread # Track the thread as the 'process'
-        siren_thread.start()
+            self._siren_volume = max(0.0, min(1.0, volume))
+            print(f"[AudioService] Siren volume set to: {self._siren_volume}")
+
+    def ramp_siren_volume(self, target: float, duration: float = 5.0):
+        """Smoothly ramps siren volume to target over duration seconds"""
+        def ramp():
+            start_vol = self._siren_volume
+            steps = 20
+            interval = duration / steps
+            for i in range(1, steps + 1):
+                if self._siren_stop_event.is_set():
+                    break
+                new_vol = start_vol + (target - start_vol) * (i / steps)
+                self.set_siren_volume(new_vol)
+                time.sleep(interval)
+        
+        threading.Thread(target=ramp, daemon=True).start()
 
     def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""
@@ -458,6 +484,11 @@ class AudioService:
                 try: self.current_process.terminate()
                 except: pass
                 self.current_process = None
+            
+            # Stop Siren
+            self._siren_stop_event.set()
+            self._siren_active = False
+            
             # Linux: killall aplay? A bit aggressive but effective for "Stop" button.
             if self.os_type != "Windows":
                 # Kill aplay and play (SoX)

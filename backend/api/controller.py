@@ -241,11 +241,13 @@ class PAController:
     def stop_task(self, task_id: str, task_type: str = None, user: str = None):
         """Called to manually stop a task (e.g., Stop Broadcast, Clear Emergency)"""
         with self._lock:
-            if not self.current_task:
+            # FIX: If emergency mode is active, we MUST allow stop even if current_task is None
+            # (Because the script might have finished, but the siren is still looping)
+            if not self.current_task and not self.emergency_mode:
                 return
 
             # If requesting to stop specific task, check ID
-            if task_id and self.current_task.id != task_id:
+            if task_id and self.current_task and self.current_task.id != task_id:
                 print(f"[Controller] Denied Stop: ID Mismatch ({task_id} vs {self.current_task.id})")
                 return
 
@@ -627,15 +629,20 @@ class PAController:
              # SYNC PLAYBACK: Blocks this thread until finished, keeping active_task in UI
              # targets ALSA Card 2 (Pi Speakers) via zones=['All Zones']
              # skip_stop=True allows siren to keep looping in background
+             # We start siren at low volume (0.15) for ducking
+             audio_service.set_siren_volume(0.15)
              audio_service.play_announcement(None, script, voice='female', zones=['All Zones'], skip_stop=True)
 
-             # --- AUTO-UNLOCK DEACTIVATION ---
+             # --- AUTO-UNLOCK DEACTIVATION & VOLUME RAMP ---
              # Once the script is done, we clear current_task so frontend shows "DEACTIVATE"
              # but we keep emergency_mode=True so siren continues and logic stays locked.
              with self._lock:
                  # Only clear if it hasn't been stopped manually in the meantime
                  if self.current_task and self.current_task.id == task.id:
-                     print("[Controller] Emergency Voice Finished. Unlocking deactivation.")
+                     print("[Controller] Emergency Voice Finished. Ramping siren and unlocking deactivation.")
+                     # Ramp siren volume to 0.8 over 5 seconds
+                     audio_service.ramp_siren_volume(0.8, 5.0)
+                     
                      self.current_task = None
                      self._update_firestore_state(None, Priority.EMERGENCY, 'EMERGENCY')
         # --- AUDIO OUTPUT END ---
