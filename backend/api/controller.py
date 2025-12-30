@@ -643,6 +643,8 @@ class PAController:
              # skip_stop=True allows siren to keep looping in background
              # UPDATED LOGIC: STOP SIREN WHILE SPEAKING
              # 1. Play Siren briefly (already started above)
+             # Let it play for ~2.5 seconds (play "twice") before interrupting
+             time.sleep(2.5)
              
              # 2. Stop Siren (implicitly via play_announcement, or explicitly)
              # We let play_announcement stop it (default behavior)
