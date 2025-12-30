@@ -277,6 +277,8 @@ class PAController:
         with self._lock:
              self.queue = [t for t in self.queue if t.id != schedule_id]
 
+    def get_active_emergency_user(self) -> Optional[str]:
+        with self._lock:
             if self.current_task and self.current_task.priority == Priority.EMERGENCY:
                  return self.current_task.data.get('user')
             return None
