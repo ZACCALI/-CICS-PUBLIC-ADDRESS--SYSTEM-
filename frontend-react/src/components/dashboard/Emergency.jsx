@@ -11,19 +11,18 @@ const Emergency = () => {
   
   // Safety Lock: Prevent instant deactivation while AI Script is playing
   const [isScriptPlaying, setIsScriptPlaying] = useState(false);
+  const [isActivating, setIsActivating] = useState(false);
 
+  // Sync isScriptPlaying with Server Task State
   useEffect(() => {
-      if (emergencyActive) {
+      // If we see an active emergency task from the server, we are definitely playing
+      if (systemState?.active_task?.type === 'emergency') {
           setIsScriptPlaying(true);
-          // Reduced to 1 second for instant deactivation capability
-          const timer = setTimeout(() => {
-              setIsScriptPlaying(false);
-          }, 1000); 
-          return () => clearTimeout(timer);
+          setIsActivating(false); // Reset acting once server acknowledges
       } else {
           setIsScriptPlaying(false);
       }
-  }, [emergencyActive]);
+  }, [systemState]);
 
   // Activator Logic
   // Check if history exists and has items
@@ -37,6 +36,7 @@ const Emergency = () => {
         alert("Unable to verify user identity. Please reload.");
         return;
     }
+    setIsActivating(true); // Immediate UI feedback
     setShowConfirm(false);
     toggleEmergency(currentUser.name, 'ACTIVATED');
   };
@@ -110,7 +110,9 @@ const Emergency = () => {
                                 disabled={isScriptPlaying} // Lock during AI Voice
                                 className={`font-bold py-3 px-8 rounded-lg shadow-lg transform transition flex items-center ${isScriptPlaying ? 'bg-gray-500 cursor-not-allowed text-gray-200' : 'bg-gray-800 hover:bg-gray-900 hover:scale-105 text-white'}`}
                             >
-                                <i className="material-icons mr-2">power_settings_new</i> 
+                                <i className="material-icons mr-2">
+                                    {isScriptPlaying ? 'campaign' : 'power_settings_new'}
+                                </i> 
                                 {isScriptPlaying ? 'BROADCASTING NOTICE...' : 'DEACTIVATE ALERT'}
                             </button>
                             {isScriptPlaying && (

@@ -605,8 +605,10 @@ class PAController:
              # UPDATED EMERGENCY SCRIPT
              script = ("Attention. This is an emergency alert. Please remain calm and follow the instructions carefully. "
                        "The situation is urgent. Stay tuned for further information.")
-             # Emergency doesn't use Intro Chime
-             audio_service.play_text(script)
+             
+             # SYNC PLAYBACK: Blocks this thread until finished, keeping active_task in UI
+             # targets ALSA Card 2 (Pi Speakers) via zones=['All Zones']
+             audio_service.play_announcement(None, script, voice='female', zones=['All Zones'])
         # --- AUDIO OUTPUT END ---
 
     def _apply_queue_shift(self):
