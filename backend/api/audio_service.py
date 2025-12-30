@@ -275,9 +275,12 @@ class AudioService:
 
                 print(f"[AudioService] SoX Play {device} (Ch: {channel or 'Stereo'})")
                 
+                # Force 2 Channels Output so 'remix' 1 0 / 0 1 works reliably
+                base_args = ['-v', '0.9', '--channels', '2']
+
                 # 1. Intro
                 if intro:
-                    cmd = ['play', '-v', '0.9', intro] + remix_flags
+                    cmd = ['play'] + base_args + [intro] + remix_flags
                     p = subprocess.Popen(cmd, env=env)
                     self._track_process(p)
                     p.wait()
@@ -285,7 +288,7 @@ class AudioService:
                 
                 # 2. Body
                 if body:
-                    cmd = ['play', '-v', '0.9', body]
+                    cmd = ['play'] + base_args + [body]
                     if start_time > 0: cmd.extend(['trim', str(start_time)])
                     cmd = cmd + remix_flags
                     
@@ -374,7 +377,10 @@ class AudioService:
                     env = os.environ.copy()
                     env["AUDIODEV"] = device
                     
-                    cmd = ['play', '-q', '-v', '0.9', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-']
+                    # Force output 2 channels so remix works
+                    # -c 1 (Input is mono 16k)
+                    # --channels 2 (Output forced to stereo)
+                    cmd = ['play', '-q', '-v', '0.9', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-', '--channels', '2']
                     cmd = cmd + remix_flags
                     
                     proc = subprocess.Popen(
