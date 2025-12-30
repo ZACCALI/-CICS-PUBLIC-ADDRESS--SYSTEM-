@@ -2,7 +2,7 @@
 .DS_Store
 Thumbs.db
 *.log
-*.txt
+# *.txt (Commented out to allow requirements.txt)
 
 # Environment variables
 .env
