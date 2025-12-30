@@ -233,14 +233,14 @@ class AudioService:
                 
                 # 1. Intro (Optional)
                 if intro:
-                    p = subprocess.Popen(['play', '-v', '3.0', intro], env=env)
+                    p = subprocess.Popen(['play', '-v', '0.9', intro], env=env)
                     self._track_process(p)
                     p.wait()
                     self._untrack_process(p)
                 
                 # 2. Body
                 if body:
-                    cmd = ['play', '-v', '3.0', body]
+                    cmd = ['play', '-v', '0.9', body]
                     if start_time > 0:
                         cmd.extend(['trim', str(start_time)])
                     p = subprocess.Popen(cmd, env=env)

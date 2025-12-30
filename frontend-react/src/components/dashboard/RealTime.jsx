@@ -48,6 +48,13 @@ const RealTime = () => {
   // Remove old useEffect for voices
 
   const handleZoneChange = (zone) => {
+    // STRICT LOCK: Prevent any zone changes if broadcasting, in emergency, or speaking
+    if (broadcastActive || emergencyActive || isSpeaking) {
+        setModalMessage("Cannot change zones while a broadcast or emergency is active.");
+        setShowModal(true);
+        return;
+    }
+
     // Logic for Broadasting safety (Min 1 active)
     if (broadcastActive) {
         if (zone === 'All Zones') {

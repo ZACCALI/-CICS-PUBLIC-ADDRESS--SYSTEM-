@@ -641,9 +641,19 @@ class PAController:
              # SYNC PLAYBACK: Blocks this thread until finished, keeping active_task in UI
              # targets ALSA Card 2 (Pi Speakers) via zones=['All Zones']
              # skip_stop=True allows siren to keep looping in background
-             # We start siren at VERY low volume (0.0005) for background effect
-             audio_service.set_siren_volume(0.0005)
-             audio_service.play_announcement(None, script, voice='female', zones=['All Zones'], skip_stop=True)
+             # UPDATED LOGIC: STOP SIREN WHILE SPEAKING
+             # 1. Play Siren briefly (already started above)
+             
+             # 2. Stop Siren (implicitly via play_announcement, or explicitly)
+             # We let play_announcement stop it (default behavior)
+             
+             # 3. Play Voice (Blocking)
+             print("[Controller] Stopping Siren for Voice Announcement...")
+             audio_service.play_announcement(None, script, voice='female', zones=['All Zones']) # skip_stop=False
+             
+             # 4. Resume Siren
+             print("[Controller] Voice Finished. Resuming Siren...")
+             audio_service.play_siren(zones=['All Zones'], volume=0.002)
 
              # --- AUTO-UNLOCK DEACTIVATION & VOLUME RAMP ---
              # Once the script is done, we clear current_task so frontend shows "DEACTIVATE"
