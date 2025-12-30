@@ -388,7 +388,7 @@ class AudioService:
                 return # Already playing
             self._siren_active = True
             self._siren_stop_event.clear()
-            self._siren_volume = 0.2 # Default low start
+            self._siren_volume = 0.05 # Default low start
         
         target_cards = self._get_target_cards(zones)
         print(f"[AudioService] Starting Emergency Siren on cards: {target_cards}")
