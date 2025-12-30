@@ -84,6 +84,8 @@ async def lifespan(app: FastAPI):
     # Shutdown
     print("[LifeSpan] Shutting down services...")
     stop_event.set()
+    try:
+        audio_service.stop()
     except Exception as e:
         print(f"[LifeSpan] Cleanup skipped or failed: {e}")
 
