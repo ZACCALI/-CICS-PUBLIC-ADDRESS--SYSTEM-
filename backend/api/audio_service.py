@@ -223,7 +223,7 @@ class AudioService:
             t = threading.Thread(target=self._play_sequence_linux, args=(intro, body, card_id, start_time))
             threads.append(t)
             t.start()
-            time.sleep(0.25) # PREVENT RACE: Stagger thread starts slightly
+            time.sleep(0.05) # PREVENT RACE: Minimal stagger (50ms) to avoid echo but ease power
         
         for t in threads:
             t.join()
@@ -325,7 +325,7 @@ class AudioService:
             
             for card_id in target_cards:
                  self._ensure_device_active(card_id) # AUTO-FIX: Unmute stream target
-                 time.sleep(0.5) # PREVENT POWER SPIKE: Stagger initialization
+                 time.sleep(0.05) # PREVENT POWER SPIKE: Minimal Stagger
                  device = f"plughw:{card_id},0"
                  try:
                     print(f"  -> Opening Pipe for {device}")
