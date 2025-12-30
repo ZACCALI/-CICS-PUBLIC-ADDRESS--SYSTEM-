@@ -79,6 +79,7 @@ class PAController:
         self.current_task: Optional[Task] = None
         self.queue: List[Task] = []    # Priority Queue for Schedules
         self.emergency_mode = False
+        self.emergency_owner = None # Track who started it for strict deactivation
         self._running = True
         
         # Track interruption duration to shift queue
@@ -269,19 +270,21 @@ class PAController:
                       print(f"[Controller] Denied Generic Stop: Cannot kill Schedule without Task ID.")
                       return
 
-                 # Emergency PROTECTION (Normal users need ID, Admins don't)
-                 if self.current_task.type == TaskType.EMERGENCY and not is_admin:
-                      # Check if history user matches (Recovery)
-                      current_owner = self.current_task.data.get('user')
-                      if user != current_owner:
-                          print(f"[Controller] Denied Stop: Emergency requires ID or Admin context.")
-                          return
+                  # Emergency PROTECTION (Normal users need ID, Admins don't)
+                  if self.current_task.type == TaskType.EMERGENCY or self.emergency_mode:
+                       if not is_admin:
+                           # Check against persistent owner
+                           owner = self.emergency_owner or (self.current_task.data.get('user') if self.current_task else None)
+                           if user != owner and owner is not None:
+                               print(f"[Controller] Denied Stop: Emergency requires Owner ({owner}) or Admin.")
+                               return
 
             if self.current_task:
                 print(f"[Controller] Stopping Task: {self.current_task.id}")
                 
                 if self.current_task.priority == Priority.EMERGENCY:
                     self.emergency_mode = False
+                    self.emergency_owner = None
                 
                 # Stop stream if active
                 if self.current_task.type == TaskType.VOICE:
@@ -290,6 +293,7 @@ class PAController:
                 # Emergency mode stopping without current_task
                 print("[Controller] Stopping Emergency Mode (Voice already finished)")
                 self.emergency_mode = False
+                self.emergency_owner = None
 
             self._update_firestore_state(None, Priority.IDLE, 'IDLE')
             
@@ -473,6 +477,7 @@ class PAController:
 
         if task.priority == Priority.EMERGENCY:
             self.emergency_mode = True
+            self.emergency_owner = task.data.get('user')
             # Play Siren on Pi (Start quiet)
             audio_service.play_siren(zones=['All Zones'], volume=0.002)
             
@@ -510,7 +515,6 @@ class PAController:
              audio_service.play_chime_sync(zones)
              
              # Small delay to ensure chime is fully finished and hardware is ready
-             import time
              time.sleep(0.5)
 
              # 2. Start the Streaming Pipe
