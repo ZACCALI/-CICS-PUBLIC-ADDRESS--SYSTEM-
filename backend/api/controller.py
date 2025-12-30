@@ -90,6 +90,7 @@ class PAController:
         # Background Music State
         self.background_resume_time = 0
         self.background_play_start: Optional[datetime] = None
+        self.last_background_content: Optional[str] = None
 
         # Reset Logic on init to ensure clean state
         self._reset_state()
@@ -202,8 +203,14 @@ class PAController:
 
                 # FRESH START: If it's a new Background Music request, reset the resume offset
                 if new_task.type == TaskType.BACKGROUND:
-                    print("[Controller] Resetting Background Resume Point for New Request.")
-                    self.background_resume_time = 0
+                    new_content = new_task.data.get('content')
+                    if new_content != self.last_background_content:
+                        print(f"[Controller] New Track: {new_content}. Resetting Resume Point.")
+                        self.background_resume_time = 0
+                        self.last_background_content = new_content
+                    else:
+                        print(f"[Controller] Resuming Track: {new_content} at {self.background_resume_time}s")
+                    
                     self.background_play_start = None
 
                 # PREEMPTION
