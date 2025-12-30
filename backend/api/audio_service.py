@@ -317,11 +317,11 @@ class AudioService:
                 # -b 16: 16-bit
                 # -c 1: Mono
                 # -: read from stdin
-                print(f"[AudioService] Starting Stream Pipe on {device} (Vol: 0.95, 16kHz)")
+                print(f"[AudioService] Starting Stream Pipe on {device} (Vol: 0.9, 16kHz)")
                 env = os.environ.copy()
                 env["AUDIODEV"] = device
                 self.stream_process = subprocess.Popen(
-                    ['play', '-q', '-v', '0.95', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-'],
+                    ['play', '-q', '-v', '0.9', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-'],
                     stdin=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
                     env=env
@@ -368,8 +368,8 @@ class AudioService:
                 try:
                     env = os.environ.copy()
                     env["AUDIODEV"] = device
-                    # Play chime at slightly higher volume for attention
-                    subprocess.run(['play', '-q', '-v', '1.0', intro_path], env=env, stderr=subprocess.DEVNULL)
+                    # Play chime at safe volume for clarity
+                    subprocess.run(['play', '-q', '-v', '0.9', intro_path], env=env, stderr=subprocess.DEVNULL)
                 except:
                     # Fallback
                     subprocess.run(['aplay', '-D', device, intro_path], stderr=subprocess.DEVNULL)
