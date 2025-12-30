@@ -604,6 +604,8 @@ export const AppProvider = ({ children }) => {
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [broadcastActive, currentUser]);   
 
+  const startBroadcast = async (user, zonesObj) => {
+      try {
           // 1. Show preparation state
           setBroadcastPreparing(true); 
 
