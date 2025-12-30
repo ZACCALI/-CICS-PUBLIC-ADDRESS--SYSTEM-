@@ -195,6 +195,16 @@ class AudioService:
         print(f"[AudioService] Final Card Selection: {list(cards)}")
         return list(cards)
 
+    def _ensure_device_active(self, card_id):
+        """Forces the card to be unmuted and at 100% volume."""
+        try:
+            # Common control names
+            controls = ["Speaker", "PCM", "Master", "Headphone", "Playback"]
+            for c in controls:
+                subprocess.run(['amixer', '-c', str(card_id), 'set', c, '100%', 'unmute'], 
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except: pass
+
     def _play_multizone(self, intro, body, card_ids, start_time=0):
         """Plays audio sequence on list of cards (Linux) or default (Windows)"""
         
@@ -207,6 +217,9 @@ class AudioService:
         # Linux / Raspberry Pi: Correct Multizone Logic
         threads = []
         for card_id in card_ids:
+            # AUTO-FIX: Ensure volume is up before playing
+            self._ensure_device_active(card_id)
+            
             t = threading.Thread(target=self._play_sequence_linux, args=(intro, body, card_id, start_time))
             threads.append(t)
             t.start()
@@ -310,6 +323,7 @@ class AudioService:
             self.stream_processes = []
             
             for card_id in target_cards:
+                 self._ensure_device_active(card_id) # AUTO-FIX: Unmute stream target
                  device = f"plughw:{card_id},0"
                  try:
                     print(f"  -> Opening Pipe for {device}")
