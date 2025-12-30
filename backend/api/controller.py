@@ -384,22 +384,59 @@ class PAController:
         
         # --- AUDIO OUTPUT START ---
         if task.type == TaskType.SCHEDULE:
-             # Check if it's Text or Audio
-             msg = task.data.get('message', '')
-             if not msg: msg = "Scheduled Announcement."
+             # Check if it's Audio File or Text
+             audio_data = task.data.get('audio')
              
-             voice = task.data.get('voice', 'female') # Default to female
-
-             # UPDATED: Use chained playback (Intro -> Text) Non-Blocking
-             intro_path = os.path.join("system_sounds", "intro.mp3")
-             abs_intro = os.path.abspath(intro_path)
+             if audio_data:
+                 print(f"[Controller] Playing Audio File Schedule...")
+                 try:
+                     # Remove header if present (data:audio/webm;base64,)
+                     if "base64," in audio_data:
+                         audio_data = audio_data.split("base64,")[1]
+                     
+                     import base64
+                     decoded_audio = base64.b64decode(audio_data)
+                     
+                     # Save to temp file
+                     temp_filename = f"temp_broadcast_{uuid.uuid4().hex}.wav" # Most pipes handle webm/wav
+                     temp_path = os.path.join("system_sounds", temp_filename)
+                     abs_temp = os.path.abspath(temp_path)
+                     
+                     with open(abs_temp, "wb") as f:
+                         f.write(decoded_audio)
+                         
+                     # Play Intro -> Audio File
+                     intro_path = os.path.join("system_sounds", "intro.mp3")
+                     abs_intro = os.path.abspath(intro_path)
+                     
+                     audio_service.play_announcement(abs_intro, abs_temp, voice='female')
+                     
+                     # Cleanup happens by next write or OS, but let's try to be clean 
+                     # (Actually audio_service is async/threaded usually? 
+                     # If _play_multizone blocks (it seems to for Linux), we can delete after.
+                     # If Windows, it returns immediately. 
+                     # Let's leave it for OS cleanup or future robust GC).
+                     
+                 except Exception as e:
+                     print(f"[Controller] Failed to decode/play audio: {e}")
              
-             audio_service.play_announcement(abs_intro, msg, voice=voice)
+             else:
+                 # Text TTS
+                 msg = task.data.get('message', '')
+                 if not msg: msg = "Scheduled Announcement."
+                 
+                 voice = task.data.get('voice', 'female') # Default to female
+    
+                 # UPDATED: Use chained playback (Intro -> Text) Non-Blocking
+                 intro_path = os.path.join("system_sounds", "intro.mp3")
+                 abs_intro = os.path.abspath(intro_path)
+                 
+                 audio_service.play_announcement(abs_intro, msg, voice=voice)
              
              # NOTIFICATION: Schedule Started
              notification_service.create(
                 "Scheduled Announcement Started",
-                f"Broadcast started for: {msg[:30]}...",
+                f"Broadcast started...",
                 type="success",
                 target_user=task.data.get('user'),
                 target_role="admin"

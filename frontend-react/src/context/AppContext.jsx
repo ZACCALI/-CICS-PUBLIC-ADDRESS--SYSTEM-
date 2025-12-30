@@ -315,6 +315,7 @@ export const AppProvider = ({ children }) => {
                   : `data:audio/webm;base64,${task.data.audio}`;
               
               const audio = new Audio(audioSrc);
+              audio.volume = 0; // MUTE LOCAL PLAYBACK (Backend handles audio on Pi)
               systemAudioRef.current = audio;
               
               audio.onended = () => {

@@ -188,15 +188,15 @@ class AudioService:
         
         try:
             if has_sox:
-                # SoX Volume Boost (3.0 = 300%)
+                # SoX Volume Boost (1.1 = 110%)
                 env = os.environ.copy()
                 env["AUDIODEV"] = device
-                # play -v 3.0 file.wav
-                print(f"[AudioService] Playing via SoX (Vol: 3.0) on {device}")
+                # play -v 1.1 file.wav
+                print(f"[AudioService] Playing via SoX (Vol: 1.1) on {device}")
                 # 1. Intro
-                subprocess.run(['play', '-v', '3.0', intro], check=True, env=env)
+                subprocess.run(['play', '-v', '1.1', intro], check=True, env=env)
                 # 2. Body
-                subprocess.run(['play', '-v', '3.0', body], check=True, env=env)
+                subprocess.run(['play', '-v', '1.1', body], check=True, env=env)
             else:
                 # Fallback to Aplay
                 print(f"[AudioService] Playing via Aplay (Standard Vol) on {device}")
