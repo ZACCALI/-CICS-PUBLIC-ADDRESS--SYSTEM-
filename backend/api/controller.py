@@ -252,7 +252,7 @@ class PAController:
                 return
 
             # ADMIN OVERRIDE & ID PROTECTION
-            if not task_id:
+            if not task_id and self.current_task:
                  # Check if user is an Admin (allowing bypass of ID requirement)
                  is_admin = user in ['System', 'System Admin', 'Admin', 'admin']
                  
@@ -270,16 +270,20 @@ class PAController:
                           print(f"[Controller] Denied Stop: Emergency requires ID or Admin context.")
                           return
 
-            print(f"[Controller] Stopping Task: {self.current_task.id}")
-            
-            if self.current_task.priority == Priority.EMERGENCY:
+            if self.current_task:
+                print(f"[Controller] Stopping Task: {self.current_task.id}")
+                
+                if self.current_task.priority == Priority.EMERGENCY:
+                    self.emergency_mode = False
+                
+                # Stop stream if active
+                if self.current_task.type == TaskType.VOICE:
+                    audio_service.stop_streaming()
+            else:
+                # Emergency mode stopping without current_task
+                print("[Controller] Stopping Emergency Mode (Voice already finished)")
                 self.emergency_mode = False
-            
-            # Stop stream if active
-            if self.current_task.type == TaskType.VOICE:
-                audio_service.stop_streaming()
 
-            self.current_task = None
             self._update_firestore_state(None, Priority.IDLE, 'IDLE')
             
             # Stop Audio
@@ -296,6 +300,7 @@ class PAController:
                 # However, "Interrupted" is different. 
                 # Let's keep resume_time until a NEW background task is started.
             
+            self.current_task = None
             audio_service.stop()
             
             # Application of Time Shift (System became IDLE)
@@ -629,8 +634,8 @@ class PAController:
              # SYNC PLAYBACK: Blocks this thread until finished, keeping active_task in UI
              # targets ALSA Card 2 (Pi Speakers) via zones=['All Zones']
              # skip_stop=True allows siren to keep looping in background
-             # We start siren at low volume (0.15) for ducking
-             audio_service.set_siren_volume(0.15)
+             # We start siren at VERY low volume (0.05) for background effect
+             audio_service.set_siren_volume(0.05)
              audio_service.play_announcement(None, script, voice='female', zones=['All Zones'], skip_stop=True)
 
              # --- AUTO-UNLOCK DEACTIVATION & VOLUME RAMP ---

@@ -192,7 +192,7 @@ export const AppProvider = ({ children }) => {
           const res = await api.get('/files/');
           setFiles(res.data);
       } catch (e) {
-          console.error("Failed to fetch files", e);
+          console.error("Failed to fetch files from " + (api.defaults.baseURL || 'local'), e);
       }
   };
 
@@ -674,9 +674,7 @@ export const AppProvider = ({ children }) => {
       try {
           const taskId = lastBroadcastTaskId.current;
           if (!taskId) {
-               // If no task ID, we likely aren't broadcasting.
-               // sending a blind /stop command kills background music!
-               console.log("Local stopBroadcast called (No active task ID). Skipping API call.");
+               console.debug("Local stopBroadcast called (No active task ID). Skipping API call.");
           } else {
                let url = `/realtime/stop?user=${encodeURIComponent(user)}`;
                url += `&task_id=${encodeURIComponent(taskId)}`;
