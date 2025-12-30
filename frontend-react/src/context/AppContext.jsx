@@ -606,7 +606,10 @@ export const AppProvider = ({ children }) => {
 
   const startBroadcast = async (user, zonesObj) => {
       try {
-          // 1. Register with Backend Controller (Start Chime)
+          // 1. NEW: Show preparation state immediately
+          setBroadcastPreparing(true); // UI shows "PLAYING CHIME..."
+
+          // 2. Register with Backend Controller (Blocks until Chime finishes)
           const zoneList = Object.keys(zonesObj).filter(k => zonesObj[k]);
           
           const res = await api.post('/realtime/start', {

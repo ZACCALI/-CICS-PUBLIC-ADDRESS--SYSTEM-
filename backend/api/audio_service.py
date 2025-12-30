@@ -260,7 +260,7 @@ class AudioService:
 
     def start_streaming(self, zones):
         """Initializes a persistent aplay pipe for low-latency streaming"""
-        self.stop()
+        self.stop_streaming() # Only stop existing stream, don't kill the chime!
         target_cards = self._get_target_cards(zones)
         if not target_cards: return
         
@@ -340,9 +340,8 @@ class AudioService:
             threads.append(t)
             t.start()
 
-        # We no longer join threads here to allow the Controller to return immediately
-        # while the chime plays in the background.
-        pass
+        for t in threads:
+            t.join()
 
     def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""
