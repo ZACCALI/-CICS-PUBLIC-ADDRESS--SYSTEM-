@@ -13,7 +13,7 @@ class ScheduleItem(BaseModel):
     date: str
     time: str
     repeat: str
-    zones: str # comma separated
+    zones: list # List of strings
     type: str = 'text' # or 'voice'
     audio: Optional[str] = None # Base64
 

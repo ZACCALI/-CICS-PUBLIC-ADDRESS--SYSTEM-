@@ -511,6 +511,8 @@ class PAController:
         if task.type == TaskType.VOICE:
              # 1. Play Intro Chime Synchronously (Non-blocking threads)
              zones = task.data.get('zones', [])
+             if isinstance(zones, str):
+                 zones = [z.strip() for z in zones.split(',')]
              print(f"[Controller] DEBUG: Voice Task Zones: {zones} (Type: {type(zones)})") # <--- DEBUG LOG
              print(f"[Controller] Playing Intro Chime for Voice Broadcast...")
              audio_service.play_chime_sync(zones)
@@ -623,6 +625,7 @@ class PAController:
                     
                     # Async Playback on All Zones (or specified)
                     zones = task.data.get('zones', ['All Zones'])
+                    if isinstance(zones, str): zones = [z.strip() for z in zones.split(',')]
                     audio_service.play_background_music(abs_media, zones=zones, start_time=start_offset)
                     
                     notification_service.create(

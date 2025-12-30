@@ -355,7 +355,7 @@ const Schedule = () => {
               date: formData.date,
               time: formData.time,
               repeat: formData.repeat,
-              zones: activeZones.join(', '),
+              zones: activeZones, // Send as Array for Backend compatibility
               status: 'Pending',
               type: audioBlob ? 'voice' : 'text',
               voice: formData.voice, // Send voice preference
