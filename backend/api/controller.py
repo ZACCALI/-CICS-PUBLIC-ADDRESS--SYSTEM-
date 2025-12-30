@@ -277,11 +277,40 @@ class PAController:
         with self._lock:
              self.queue = [t for t in self.queue if t.id != schedule_id]
 
-    def get_active_emergency_user(self) -> Optional[str]:
-        with self._lock:
             if self.current_task and self.current_task.priority == Priority.EMERGENCY:
                  return self.current_task.data.get('user')
             return None
+
+    def play_realtime_chunk(self, audio_base64: str):
+        """Decodes and plays a chunk of audio immediately"""
+        # Ensure we are actually in a Voice Broadcast state
+        if not self.current_task or self.current_task.type != TaskType.VOICE:
+            print("[Controller] Denied Speak: No Voice Broadcast Active")
+            return
+
+        try:
+             import base64
+             # Clean header
+             if "base64," in audio_base64:
+                 audio_base64 = audio_base64.split("base64,")[1]
+            
+             decoded = base64.b64decode(audio_base64)
+             
+             # Save temp chunk
+             chunk_filename = f"chunk_{uuid.uuid4().hex}.wav"
+             chunk_path = os.path.join("system_sounds", chunk_filename)
+             abs_chunk = os.path.abspath(chunk_path)
+             
+             with open(abs_chunk, "wb") as f:
+                 f.write(decoded)
+             
+             # Direct Play (Fire and Forget to avoid blocking stream)
+             # No Intro needed for chunks
+             # Using 'play_file' from audio_service which is generic
+             audio_service.play_file(abs_chunk)
+             
+        except Exception as e:
+            print(f"[Controller] Chunk Error: {e}")
 
     # --- INTERNAL LOGIC ---
     def _add_to_queue(self, task: Task):

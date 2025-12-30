@@ -159,6 +159,11 @@ const RealTime = () => {
       
       draw();
   };
+  /* 
+    TOGGLE BROADCAST LOGIC (Chunked Streaming)
+    1. Start: Init Recorder -> Start Broadcast (Lock) -> Record 2s chunks -> Send
+    2. Stop: Stop Recorder -> Send Last Chunk -> Stop Broadcast (Unlock)
+  */
   const toggleBroadcast = async () => {
     if (isSubmitting) return; // Debounce
     
@@ -168,35 +173,39 @@ const RealTime = () => {
         return;
     }
 
+    // --- STOPPING ---
     if (broadcastActive) {
+        // 1. Stop Recorder
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+        }
+        
+        // 2. Stop Backend Session
         stopBroadcast(currentUser?.name || 'Admin');
         
+        // 3. Log
         if (currentLogId) {
              const endTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-             
              updateLog(currentLogId, {
                  action: 'Voice Broadcast Session',
                  details: `Voice Broadcast (Start: ${startTimeStrRef.current} - End: ${endTimeStr})`
              });
              setCurrentLogId(null);
-        } else {
-             // Fallback
-             logActivity(currentUser?.name, 'Stopped Voice Broadcast', 'Voice', 'Microphone deactivated');
         }
         return;
     }
 
+    // --- STARTING ---
     if (!Object.values(zones).some(z => z)) {
         setModalMessage('Please select at least one zone before broadcasting.');
         setShowModal(true);
         return;
     }
     
-    // Lock Button
     setIsSubmitting(true);
     
     try {
-        // Pass User and Zones to Context
+        // 1. Start Backend Session (Locks system, Plays Intro on Pi)
         const success = await startBroadcast(currentUser?.name || 'Admin', zones);
         
         if (success) {
@@ -205,11 +214,43 @@ const RealTime = () => {
             
             const logId = await logActivity(currentUser?.name, 'Active Voice Broadcast', 'Voice', 'Microphone is active...');
             setCurrentLogId(logId);
+            
+            // 2. Start Microphone & Recorder
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaStreamRef.current = stream;
+            
+            // Use timeSlice for "Streaming" feel (e.g. 2000ms chunks)
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            
+            mediaRecorder.ondataavailable = async (e) => {
+                if (e.data.size > 0) {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(e.data);
+                    reader.onloadend = async () => {
+                         const base64data = reader.result;
+                         // Send Chunk to Backend
+                         try {
+                             await api.post('/realtime/speak', {
+                                 user: currentUser?.name || 'Admin',
+                                 audio_data: base64data
+                             });
+                         } catch (err) {
+                             console.error("Chunk send failed", err);
+                         }
+                    };
+                }
+            };
+            
+            // Start recording in 2s chunks
+            mediaRecorder.start(2000); 
         } 
     } catch (e) {
         console.error("Broadcast toggle error", e);
+        setModalMessage("Microphone access failed or system error.");
+        setShowModal(true);
     } finally {
-        setIsSubmitting(false); // Unlock
+        setIsSubmitting(false); 
     }
   };
 

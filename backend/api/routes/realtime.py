@@ -58,6 +58,23 @@ def start_broadcast(req: BroadcastRequest, user_token: dict = Depends(verify_tok
     
     return {"message": "Broadcast Started", "task_id": task.id}
 
+class SpeakRequest(BaseModel):
+    user: str
+    audio_data: str # Base64 encoded
+
+@real_time_announcements_router.post("/speak")
+def speak_chunk(req: SpeakRequest, user_token: dict = Depends(verify_token)):
+    """
+    Receive and play a chunk of audio for the active broadcast.
+    """
+    try:
+        controller.play_realtime_chunk(req.audio_data)
+        return {"message": "Chunk processed"}
+    except Exception as e:
+        print(f"Speak error: {e}")
+        # Return 200 to keep frontend streaming, but log error
+        return {"message": "Chunk failed", "error": str(e)}
+
 @real_time_announcements_router.post("/stop")
 def stop_broadcast(user: str, type: str = "voice", task_id: Optional[str] = None, user_token: dict = Depends(verify_token)): 
     """
