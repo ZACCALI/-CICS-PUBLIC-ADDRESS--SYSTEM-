@@ -28,6 +28,7 @@ const RealTime = () => {
   const analyserRef = useRef(null);
   const canvasRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const [textMessage, setTextMessage] = useState('');
   
   // Memoize Voices to avoid re-renders
   const voices = React.useMemo(() => [
