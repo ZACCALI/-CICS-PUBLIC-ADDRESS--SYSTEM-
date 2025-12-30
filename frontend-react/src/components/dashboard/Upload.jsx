@@ -11,6 +11,7 @@ const Upload = () => {
   
   // Audio Player State
   const [playingId, setPlayingId] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false); // Track active playback state
   const [currentLogId, setCurrentLogId] = useState(null); 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -114,6 +115,8 @@ const Upload = () => {
       audio.addEventListener('timeupdate', handleTimeUpdate);
       audio.addEventListener('loadedmetadata', handleLoadedMetadata);
       audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('play', () => setIsPlaying(true));
+      audio.addEventListener('pause', () => setIsPlaying(false));
       
       const handleStopGlobal = () => {
           // INTERRUPTION LOGIC: Just pause, don't clear state (so we can resume)
@@ -128,6 +131,8 @@ const Upload = () => {
           audio.removeEventListener('timeupdate', handleTimeUpdate);
           audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
           audio.removeEventListener('ended', handleEnded);
+          audio.removeEventListener('play', () => setIsPlaying(true));
+          audio.removeEventListener('pause', () => setIsPlaying(false));
           window.removeEventListener('stop-all-audio', handleStopGlobal);
           audio.pause();
       };
@@ -436,10 +441,11 @@ const Upload = () => {
         <h3 className="text-lg font-semibold text-gray-700 mb-4">Select Target Zones:</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {Object.keys(zones).map((label, idx) => (
-             <label key={idx} className="flex items-center space-x-3 p-3 border border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md">
+             <label key={idx} className={`flex items-center space-x-3 p-3 border border-gray-100 rounded-lg transition-all duration-200 shadow-sm ${isPlaying ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50 cursor-pointer active:scale-95 hover:shadow-md'}`}>
                <input 
                  type="checkbox" 
                  checked={zones[label]}
+                 disabled={isPlaying}
                  onChange={() => {
                     if (label === 'All Zones') {
                         const newValue = !zones['All Zones'];
