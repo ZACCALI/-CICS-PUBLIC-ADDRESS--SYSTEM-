@@ -194,20 +194,15 @@ const Upload = () => {
 
       if (playingId === id) {
           // Toggle Pause/Play
-          if (audioRef.current.paused) {
-              console.log("[Upload] Manual Play Triggered");
-              isManuallyPaused.current = false;
-              try {
-                  // Explicitly tell backend to start (with current offset if any)
+          try {
+              if (audioRef.current.paused) {
+                  // Play
+                  isManuallyPaused.current = false;
+                  // ... (API calls) ...
                   const currentSecs = audioRef.current.currentTime || 0;
-                  console.log(`[Upload] Starting on Pi at ${currentSecs}s`);
-                  
-                  // Calculate active zones
                   const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-                  // If no zones selected (and not All Zones), default to All Zones to ensure playback? 
-                  // Or respect silence? Let's default to All Zones if nothing selected to avoid confusion.
                   const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
-
+                  
                   await api.post('/realtime/start', {
                       user: currentUser?.name || 'Admin',
                       zones: targetZones, 
@@ -216,38 +211,27 @@ const Upload = () => {
                       start_time: currentSecs
                   });
                   await audioRef.current.play();
-              } catch (err) {
-                  console.error("Playback failed:", err);
-                  setErrorMessage("Playback failed: " + err.message);
-                  setShowErrorModal(true);
-                  isManuallyPaused.current = true; // Safety
-              }
-          } else {
-              console.log("[Upload] Manual Pause Triggered");
-              isManuallyPaused.current = true;
-              audioRef.current.pause();
-              try {
+              } else {
+                  // Pause
+                  isManuallyPaused.current = true;
+                  audioRef.current.pause();
                   await api.post(`/realtime/stop?user=${encodeURIComponent(currentUser?.name || 'Admin')}&type=background`);
-              } catch (e) {
-                  console.warn("Failed to notify backend of pause", e);
               }
+          } catch (err) {
+              console.error("Playback toggle failed:", err);
+              // setErrorMessage("Playback failed: " + err.message); // Optional
           }
       } else {
           // Play New
-          // New: Use 'url' from backend (Static File)
-          if (fileToPlay.url) {
-             const fullUrl = `${api.defaults.baseURL}${fileToPlay.url}`;
-             console.log("Playing from URL:", fullUrl);
-             audioRef.current.src = fullUrl;
-             
-             try {
+          try {
+              if (fileToPlay.url) {
+                 const fullUrl = `${api.defaults.baseURL}${fileToPlay.url}`;
+                 audioRef.current.src = fullUrl;
                  setPlayingId(id);
                  startTimeRef.current = Date.now();
                  isManuallyPaused.current = false;
                  setCurrentTime(0);
 
-                 // Tell backend to start FRESH
-                 // Calculate active zones
                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
 
@@ -261,29 +245,23 @@ const Upload = () => {
                  
                  await audioRef.current.play();
                  
-                 // Log activity
-             try {
-                 const newLogId = await logActivity(
-                     currentUser?.name || 'Admin',
-                     'Music Session',
-                     'Music',
-                     `${fileToPlay.name} (Start: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
-                 );
-                 setCurrentLogId(newLogId);
-             } catch (logErr) {
-                 console.error("Logging failed", logErr);
-             }
-             } catch (err) {
-                 console.error("Playback load failed:", err);
-                 setErrorMessage("Could not play audio: " + err.message);
-                 setShowErrorModal(true);
-             }
-          } else if (fileToPlay.content) {
-              // Fallback for legacy local files (if any persist in cache)
-              audioRef.current.src = fileToPlay.content;
-              // ... (Start play)
-              await audioRef.current.play();
-              setPlayingId(id);
+                  // Log
+                 logActivity(
+                      currentUser?.name || 'Admin',
+                      'Music Session',
+                      'Music',
+                      `${fileToPlay.name} (Start: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                 ).then(id => setCurrentLogId(id)).catch(e => console.error(e));
+
+              } else if (fileToPlay.content) {
+                  audioRef.current.src = fileToPlay.content;
+                  await audioRef.current.play();
+                  setPlayingId(id);
+              }
+          } catch (err) {
+              console.error("Playback failed:", err);
+              setErrorMessage("Could not play audio: " + err.message);
+              setShowErrorModal(true);
           }
       }
       isProcessing.current = false;
