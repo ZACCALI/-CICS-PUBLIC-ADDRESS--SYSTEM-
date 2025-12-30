@@ -149,14 +149,12 @@ const Upload = () => {
           const isMyUser = task.data?.user === currentUserName;
           
           if (task.type === 'BACKGROUND' || task.priority === 10) {
-              // It's Background Mode. If it's MY file (or generic background), RESUME.
+              // It's Background Mode. ONLY auto-resume if NOT manually paused.
              if (isMyUser && audioRef.current.paused && !isManuallyPaused.current) {
-                 console.log("[Resume Logic] Auto-Resuming Background Music for", currentUserName);
+                 console.log("[Resume Logic] System Idle -> Auto-Resuming", currentUserName);
                  audioRef.current.play().catch(e => console.error("Resume failed", e));
-             } else if (audioRef.current && !audioRef.current.paused && isManuallyPaused.current) {
-                 // Safety: If it's playing but we are manually paused, pause it.
-                 console.log("[Resume Logic] Enforcing Manual Pause");
-                 audioRef.current.pause();
+             } else {
+                 console.log("[Resume Logic] Stay Paused (Manual Pause Active or Not My Track)");
              }
           } else {
               // Higher priority task active (Voice/Schedule) -> PAUSE
@@ -212,32 +210,35 @@ const Upload = () => {
       if (playingId === id) {
           // Toggle Pause/Play
           if (audioRef.current.paused) {
+              console.log("[Upload] Manual Play Triggered");
               isManuallyPaused.current = false;
               try {
-                  // If we were paused, we might need to tell the backend to restart at our CurrentTime
+                  // Explicitly tell backend to start (with current offset if any)
+                  const currentSecs = audioRef.current.currentTime || 0;
+                  console.log(`[Upload] Starting on Pi at ${currentSecs}s`);
+                  
                   await api.post('/realtime/start', {
                       user: currentUser?.name || 'Admin',
                       zones: ['All Zones'], 
                       type: 'background',
                       content: fileToPlay.name,
-                      start_time: audioRef.current.currentTime
+                      start_time: currentSecs
                   });
                   await audioRef.current.play();
               } catch (err) {
                   console.error("Playback failed:", err);
                   setErrorMessage("Playback failed: " + err.message);
                   setShowErrorModal(true);
+                  isManuallyPaused.current = true; // Safety
               }
           } else {
-              // OPTIMIZATION: Release Lock on Pause so others can use system
-              console.log("[Upload] Pausing and Releasing Lock");
-              audioRef.current.pause();
+              console.log("[Upload] Manual Pause Triggered");
               isManuallyPaused.current = true;
+              audioRef.current.pause();
               try {
-                  // Calls stop but keeps local PlayingId so we can resume
                   await api.post(`/realtime/stop?user=${encodeURIComponent(currentUser?.name || 'Admin')}&type=background`);
               } catch (e) {
-                  console.warn("Failed to release lock on pause", e);
+                  console.warn("Failed to notify backend of pause", e);
               }
           }
       } else {

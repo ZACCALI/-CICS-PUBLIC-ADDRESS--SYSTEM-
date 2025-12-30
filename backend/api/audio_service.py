@@ -191,15 +191,15 @@ class AudioService:
                 # SoX Volume Boost (1.1 = 110%)
                 env = os.environ.copy()
                 env["AUDIODEV"] = device
-                print(f"[AudioService] Playing via SoX (Vol: 1.0, Seek: {start_time}s) on {device}")
+                print(f"[AudioService] Playing via SoX (Vol: 0.85, Seek: {start_time}s) on {device}")
                 
                 # 1. Intro (Optional)
                 if intro:
-                    subprocess.run(['play', '-v', '1.0', intro], check=True, env=env)
+                    subprocess.run(['play', '-v', '0.85', intro], check=True, env=env)
                 
                 # 2. Body
                 if body:
-                    cmd = ['play', '-v', '1.0', body]
+                    cmd = ['play', '-v', '0.85', body]
                     if start_time > 0:
                         cmd.extend(['trim', str(start_time)])
                     subprocess.run(cmd, check=True, env=env)
@@ -285,7 +285,7 @@ class AudioService:
              # Try SoX first for volume/mixing
              env = os.environ.copy()
              env["AUDIODEV"] = device
-             subprocess.run(['play', '-v', '1.0', file_path], check=True, env=env, stderr=subprocess.DEVNULL)
+             subprocess.run(['play', '-v', '0.85', file_path], check=True, env=env, stderr=subprocess.DEVNULL)
         except:
              # Fallback to aplay
              try:
