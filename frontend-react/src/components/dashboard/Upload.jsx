@@ -5,7 +5,7 @@ import Modal from '../common/Modal';
 import api from '../../api/axios';
 
 const Upload = () => {
-  const { files, addFile, deleteFile, logActivity, updateLog, emergencyActive, systemState } = useApp();
+  const { files, addFile, deleteFile, logActivity, updateLog, emergencyActive, systemState, zones } = useApp();
   const { currentUser } = useAuth();
   const fileInputRef = useRef(null);
   
@@ -203,9 +203,15 @@ const Upload = () => {
                   const currentSecs = audioRef.current.currentTime || 0;
                   console.log(`[Upload] Starting on Pi at ${currentSecs}s`);
                   
+                  // Calculate active zones
+                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+                  // If no zones selected (and not All Zones), default to All Zones to ensure playback? 
+                  // Or respect silence? Let's default to All Zones if nothing selected to avoid confusion.
+                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
+
                   await api.post('/realtime/start', {
                       user: currentUser?.name || 'Admin',
-                      zones: ['All Zones'], 
+                      zones: targetZones, 
                       type: 'background',
                       content: fileToPlay.name,
                       start_time: currentSecs
@@ -242,9 +248,13 @@ const Upload = () => {
                  setCurrentTime(0);
 
                  // Tell backend to start FRESH
+                 // Calculate active zones
+                 const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+                 const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
+
                  await api.post('/realtime/start', {
                      user: currentUser?.name || 'Admin',
-                     zones: ['All Zones'], 
+                     zones: targetZones, 
                      type: 'background',
                      content: fileToPlay.name,
                      start_time: 0
