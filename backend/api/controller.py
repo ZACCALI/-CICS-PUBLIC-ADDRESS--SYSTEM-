@@ -284,7 +284,7 @@ class PAController:
             return None
 
     def play_realtime_chunk(self, audio_base64: str):
-        """Decodes and plays a chunk of audio immediately"""
+        """Decodes RAW PCM chunks, wraps in WAV header, and plays immediately"""
         # Ensure we are actually in a Voice Broadcast state
         if not self.current_task or self.current_task.type != TaskType.VOICE:
             print("[Controller] Denied Speak: No Voice Broadcast Active")
@@ -292,49 +292,28 @@ class PAController:
 
         try:
              import base64
-             # Clean header
+             import wave
+             
+             # Clean header if present (though frontend sends raw b64 now)
              if "base64," in audio_base64:
                  audio_base64 = audio_base64.split("base64,")[1]
             
-             decoded = base64.b64decode(audio_base64)
+             decoded_pcm = base64.b64decode(audio_base64)
              
-             # Save temp chunk
-             # Save temp chunk as WebM (Browser Default)
-             chunk_base = f"chunk_{uuid.uuid4().hex}"
-             webm_path = os.path.join("system_sounds", f"{chunk_base}.webm")
-             wav_path = os.path.join("system_sounds", f"{chunk_base}.wav")
+             # Save temp chunk with WAV Header
+             chunk_filename = f"chunk_{uuid.uuid4().hex}.wav"
+             chunk_path = os.path.join("system_sounds", chunk_filename)
+             abs_chunk = os.path.abspath(chunk_path)
              
-             abs_webm = os.path.abspath(webm_path)
-             abs_wav = os.path.abspath(wav_path)
+             # Write WAV (44.1kHz, 16-bit, Mono)
+             with wave.open(abs_chunk, "wb") as wav_file:
+                 wav_file.setnchannels(1)        # Mono
+                 wav_file.setsampwidth(2)        # 2 bytes (16-bit)
+                 wav_file.setframerate(44100)    # 44.1kHz
+                 wav_file.writeframes(decoded_pcm)
              
-             with open(abs_webm, "wb") as f:
-                 f.write(decoded)
-             
-             # Convert WebM to WAV using FFMPEG (Fixes "TV Static" issue of playing raw WebM)
-             # ffmpeg -i input.webm -ac 1 -ar 44100 -f wav output.wav
-             import subprocess
-             try:
-                 subprocess.run([
-                     'ffmpeg', '-y', 
-                     '-i', abs_webm, 
-                     '-ac', '1', # Mono
-                     '-ar', '44100', # Standard Rate
-                     '-f', 'wav', 
-                     abs_wav
-                 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-                 
-                 # Play the converted WAV
-                 audio_service.play_file(abs_wav)
-                 
-                 # Clean up (Optional, OS handles temp usually but good practice)
-                 # threading.Thread(target=lambda: (time.sleep(10), os.remove(abs_webm), os.remove(abs_wav))).start()
-                 
-             except FileNotFoundError:
-                 print("[Controller] Error: FFMPEG not installed. Cannot convert WebM to WAV.")
-                 # Fallback: Try playing WebM directly if 'play' supports it (often doesn't, hence static)
-                 # audio_service.play_file(abs_webm) 
-             except Exception as rx:
-                  print(f"[Controller] Conversion/Playback Error: {rx}")
+             # Direct Play (Fire and Forget)
+             audio_service.play_file(abs_chunk)
              
         except Exception as e:
             print(f"[Controller] Chunk Error: {e}")

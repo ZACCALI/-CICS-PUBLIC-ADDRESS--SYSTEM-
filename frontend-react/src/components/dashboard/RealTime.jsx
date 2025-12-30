@@ -160,10 +160,25 @@ const RealTime = () => {
       draw();
   };
   /* 
-    TOGGLE BROADCAST LOGIC (Chunked Streaming)
-    1. Start: Init Recorder -> Start Broadcast (Lock) -> Record 2s chunks -> Send
-    2. Stop: Stop Recorder -> Send Last Chunk -> Stop Broadcast (Unlock)
+    TOGGLE BROADCAST LOGIC (Raw PCM Streaming)
+    1. Start: Init AudioContext -> ScriptProcessor -> Start Broadcast (Lock) -> Record PCM -> Send
+    2. Stop: Disconnect -> Stop Broadcast (Unlock)
   */
+  // Audio Refs
+  const processorRef = useRef(null);
+  const sourceRef = useRef(null);
+  // audioContextRef is already defined at top of component
+
+  // Helper: Float32 to Int16 PCM
+  const floatTo16BitPCM = (input) => {
+      const output = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]));
+          output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      return output;
+  };
+
   const toggleBroadcast = async () => {
     if (isSubmitting) return; // Debounce
     
@@ -175,9 +190,19 @@ const RealTime = () => {
 
     // --- STOPPING ---
     if (broadcastActive) {
-        // 1. Stop Recorder
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-            mediaRecorderRef.current.stop();
+        // 1. Stop Audio Context logic
+        if (processorRef.current) {
+            processorRef.current.disconnect(); 
+            processorRef.current.onaudioprocess = null;
+            processorRef.current = null;
+        }
+        if (sourceRef.current) {
+            sourceRef.current.disconnect(); 
+            sourceRef.current = null;
+        }
+        if (audioContextRef.current) {
+            audioContextRef.current.close(); 
+            audioContextRef.current = null;
         }
         
         // 2. Stop Backend Session
@@ -215,35 +240,57 @@ const RealTime = () => {
             const logId = await logActivity(currentUser?.name, 'Active Voice Broadcast', 'Voice', 'Microphone is active...');
             setCurrentLogId(logId);
             
-            // 2. Start Microphone & Recorder
+            // 2. Start Microphone & Audio Processing
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaStreamRef.current = stream;
+
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: 44100, // Force 44.1kHz or let it be default
+            });
+            audioContextRef.current = audioCtx;
             
-            // Use timeSlice for "Streaming" feel (e.g. 2000ms chunks)
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
+            const source = audioCtx.createMediaStreamSource(stream);
+            sourceRef.current = source;
             
-            mediaRecorder.ondataavailable = async (e) => {
-                if (e.data.size > 0) {
-                    const reader = new FileReader();
-                    reader.readAsDataURL(e.data);
-                    reader.onloadend = async () => {
-                         const base64data = reader.result;
-                         // Send Chunk to Backend
-                         try {
-                             await api.post('/realtime/speak', {
-                                 user: currentUser?.name || 'Admin',
-                                 audio_data: base64data
-                             });
-                         } catch (err) {
-                             console.error("Chunk send failed", err);
-                         }
-                    };
+            // ScriptProcessor (bufferSize, inputChannels, outputChannels)
+            // 4096 samples @ 44.1kHz ~= 92ms latency
+            const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+            processorRef.current = processor;
+
+            processor.onaudioprocess = async (e) => {
+                const inputData = e.inputBuffer.getChannelData(0);
+                
+                // Convert to Int16 PCM
+                const pcm16 = floatTo16BitPCM(inputData);
+                
+                // Convert to Base64
+                // Uint8Array view of the Int16Array
+                const pcmBytes = new Uint8Array(pcm16.buffer);
+                
+                // Binary to Base64 String
+                let binary = '';
+                const len = pcmBytes.byteLength;
+                for (let i = 0; i < len; i++) {
+                    binary += String.fromCharCode(pcmBytes[i]);
+                }
+                const base64data = window.btoa(binary);
+
+                // Send Chunk
+                try {
+                    await api.post('/realtime/speak', {
+                        user: currentUser?.name || 'Admin',
+                        audio_data: base64data
+                    });
+                } catch (err) {
+                    console.error("Chunk send failed", err);
                 }
             };
             
-            // Start recording in 2s chunks
-            mediaRecorder.start(2000); 
+            source.connect(processor);
+            processor.connect(audioCtx.destination); // Needed for Chrome to fire the event, but mute output?
+            // Actually connecting to destination might cause feedback if 'Audio monitoring' isn't wanted.
+            // The UI says "Audio monitoring enabled (You will hear yourself)"
+            // So we leave it connected to destination.
         } 
     } catch (e) {
         console.error("Broadcast toggle error", e);
