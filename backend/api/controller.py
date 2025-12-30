@@ -312,8 +312,9 @@ class PAController:
                  wav_file.setframerate(44100)    # 44.1kHz
                  wav_file.writeframes(decoded_pcm)
              
-             # Direct Play (Fire and Forget)
-             audio_service.play_file(abs_chunk)
+             # Direct Play on Active Zones
+             zones = self.current_task.data.get('zones', [])
+             audio_service.play_broadcast_chunk(abs_chunk, zones)
              
         except Exception as e:
             print(f"[Controller] Chunk Error: {e}")

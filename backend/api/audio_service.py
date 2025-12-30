@@ -240,6 +240,39 @@ class AudioService:
         else:
             print("[AudioService] Failed to generate TTS.")
 
+    def play_broadcast_chunk(self, file_path, zones):
+        """Plays a specific WAV chunk on selected zones concurrently"""
+        target_cards = self._get_target_cards(zones)
+        
+        # Fire and forget concurrent playback
+        threads = []
+        for card_id in target_cards:
+            t = threading.Thread(target=self._play_single_file_linux, args=(file_path, card_id))
+            threads.append(t)
+            t.start()
+        
+        # We don't join here to keep latency low? 
+        # Actually, if we don't join, we might overlap chunks if they come too fast.
+        # But 'speak' is blocking in controller? No, controller calls this.
+        # Let's join to ensure order.
+        for t in threads:
+            t.join()
+
+    def _play_single_file_linux(self, file_path, card_id):
+        """Plays a single file on a specific card"""
+        device = f"plughw:{card_id},0"
+        try:
+             # Try SoX first for volume/mixing
+             env = os.environ.copy()
+             env["AUDIODEV"] = device
+             subprocess.run(['play', '-v', '1.1', file_path], check=True, env=env, stderr=subprocess.DEVNULL)
+        except:
+             # Fallback to aplay
+             try:
+                subprocess.run(['aplay', '-D', device, file_path], check=True, stderr=subprocess.DEVNULL)
+             except Exception as e:
+                print(f"[AudioService] Playback failed on card {card_id}: {e}")
+
     # ... (Keep existing play_intro_async, play_file, stop, _run_command helper methods intact or simplified) ...
     # Integrating critical existing helpers below for compatibility:
 

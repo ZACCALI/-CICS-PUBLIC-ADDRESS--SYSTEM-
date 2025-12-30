@@ -167,6 +167,7 @@ const RealTime = () => {
   // Audio Refs
   const processorRef = useRef(null);
   const sourceRef = useRef(null);
+  const gainRef = useRef(null); // Gain Node for Muting
   // audioContextRef is already defined at top of component
 
   // Helper: Float32 to Int16 PCM
@@ -200,6 +201,10 @@ const RealTime = () => {
             sourceRef.current.disconnect(); 
             sourceRef.current = null;
         }
+        if (gainRef.current) {
+            gainRef.current.disconnect();
+            gainRef.current = null;
+        }
         if (audioContextRef.current) {
             audioContextRef.current.close(); 
             audioContextRef.current = null;
@@ -227,6 +232,13 @@ const RealTime = () => {
         return;
     }
     
+    // Safety Check for Microphone API (Requires HTTPS or Localhost)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setModalMessage("Microphone access blocked. access via 'localhost' or HTTPS is required.");
+        setShowModal(true);
+        return;
+    }
+
     setIsSubmitting(true);
     
     try {
@@ -245,10 +257,15 @@ const RealTime = () => {
             mediaStreamRef.current = stream;
 
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: 44100, // Force 44.1kHz or let it be default
+                sampleRate: 44100, // Force 44.1kHz
             });
             audioContextRef.current = audioCtx;
             
+            // Gain Node to MUTE local feedback
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.value = 0; // Mute
+            gainRef.current = gainNode;
+
             const source = audioCtx.createMediaStreamSource(stream);
             sourceRef.current = source;
             
@@ -286,15 +303,14 @@ const RealTime = () => {
                 }
             };
             
+            // Connect Graph: Source -> Processor -> Gain -> Destination (Muted)
             source.connect(processor);
-            processor.connect(audioCtx.destination); // Needed for Chrome to fire the event, but mute output?
-            // Actually connecting to destination might cause feedback if 'Audio monitoring' isn't wanted.
-            // The UI says "Audio monitoring enabled (You will hear yourself)"
-            // So we leave it connected to destination.
+            processor.connect(gainNode);
+            gainNode.connect(audioCtx.destination); // Keep graph alive but silent
         } 
     } catch (e) {
         console.error("Broadcast toggle error", e);
-        setModalMessage("Microphone access failed or system error.");
+        setModalMessage(`Microphone Error: ${e.message}`);
         setShowModal(true);
     } finally {
         setIsSubmitting(false); 
