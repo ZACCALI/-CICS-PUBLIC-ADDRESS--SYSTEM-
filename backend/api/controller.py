@@ -270,14 +270,14 @@ class PAController:
                       print(f"[Controller] Denied Generic Stop: Cannot kill Schedule without Task ID.")
                       return
 
-                  # Emergency PROTECTION (Normal users need ID, Admins don't)
-                  if self.current_task.type == TaskType.EMERGENCY or self.emergency_mode:
-                       if not is_admin:
-                           # Check against persistent owner
-                           owner = self.emergency_owner or (self.current_task.data.get('user') if self.current_task else None)
-                           if user != owner and owner is not None:
-                               print(f"[Controller] Denied Stop: Emergency requires Owner ({owner}) or Admin.")
-                               return
+                 # Emergency PROTECTION (Normal users need ID, Admins don't)
+                 if self.current_task.type == TaskType.EMERGENCY or self.emergency_mode:
+                     if not is_admin:
+                         # Check against persistent owner
+                         owner = self.emergency_owner or (self.current_task.data.get('user') if self.current_task else None)
+                         if user != owner and owner is not None:
+                             print(f"[Controller] Denied Stop: Emergency requires Owner ({owner}) or Admin.")
+                             return
 
             if self.current_task:
                 print(f"[Controller] Stopping Task: {self.current_task.id}")
