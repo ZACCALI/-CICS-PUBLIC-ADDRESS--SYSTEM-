@@ -511,6 +511,7 @@ class PAController:
         if task.type == TaskType.VOICE:
              # 1. Play Intro Chime Synchronously (Non-blocking threads)
              zones = task.data.get('zones', [])
+             print(f"[Controller] DEBUG: Voice Task Zones: {zones} (Type: {type(zones)})") # <--- DEBUG LOG
              print(f"[Controller] Playing Intro Chime for Voice Broadcast...")
              audio_service.play_chime_sync(zones)
              
@@ -541,12 +542,11 @@ class PAController:
                      
                      with open(abs_temp, "wb") as f:
                          f.write(decoded_audio)
-                         
-                     # Play Intro -> Audio File
+                                          # Play Intro -> Audio File
                      intro_path = os.path.join("system_sounds", "intro.mp3")
                      abs_intro = os.path.abspath(intro_path)
                      
-                     audio_service.play_announcement(abs_intro, abs_temp, voice='female')
+                     audio_service.play_wav(abs_intro, abs_temp, zones=task.data.get('zones'))
                      
                      # Cleanup happens by next write or OS, but let's try to be clean 
                      # (Actually audio_service is async/threaded usually? 
@@ -567,8 +567,7 @@ class PAController:
                  # UPDATED: Use chained playback (Intro -> Text) Non-Blocking
                  intro_path = os.path.join("system_sounds", "intro.mp3")
                  abs_intro = os.path.abspath(intro_path)
-                 
-                 audio_service.play_announcement(abs_intro, msg, voice=voice)
+                 audio_service.play_announcement(abs_intro, msg, voice=voice, zones=task.data.get('zones'))
              
              # NOTIFICATION: Schedule Started
              notification_service.create(
@@ -623,7 +622,8 @@ class PAController:
                     self.background_play_start = datetime.now()
                     
                     # Async Playback on All Zones (or specified)
-                    audio_service.play_background_music(abs_media, zones=['All Zones'], start_time=start_offset)
+                    zones = task.data.get('zones', ['All Zones'])
+                    audio_service.play_background_music(abs_media, zones=zones, start_time=start_offset)
                     
                     notification_service.create(
                         "Music Started",

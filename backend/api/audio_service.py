@@ -159,6 +159,15 @@ class AudioService:
         # 3. Play on Targets
         self._play_multizone(intro_path, wav_path, target_cards)
 
+    def play_wav(self, intro_path, wav_path, zones=[], skip_stop=False):
+        """Plays an existing WAV/MP3 file on specific zones"""
+        if not skip_stop:
+            self.stop()
+        print(f"[AudioService] Playing WAV: '{wav_path}' -> Zones: {zones}")
+        
+        target_cards = self._get_target_cards(zones)
+        self._play_multizone(intro_path, wav_path, target_cards)
+
     def _get_target_cards(self, zones):
         """Maps logical zones (names) to targets [{'card': int, 'channel': str/None}]"""
         targets = []
