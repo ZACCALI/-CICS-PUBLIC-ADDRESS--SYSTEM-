@@ -391,7 +391,7 @@ class PAController:
              voice = task.data.get('voice', 'female') # Default to female
 
              # UPDATED: Use chained playback (Intro -> Text) Non-Blocking
-             intro_path = os.path.join("system_sounds", "intro.wav")
+             intro_path = os.path.join("system_sounds", "intro.mp3")
              abs_intro = os.path.abspath(intro_path)
              
              audio_service.play_announcement(abs_intro, msg, voice=voice)
@@ -408,7 +408,7 @@ class PAController:
         elif task.type == TaskType.VOICE:
             # Voice is Realtime (Microphone). 
             # UPDATED: Use Async Intro so we don't block Start Command
-            intro_path = os.path.join("system_sounds", "intro.wav")
+            intro_path = os.path.join("system_sounds", "intro.mp3")
             abs_intro = os.path.abspath(intro_path)
             audio_service.play_intro_async(abs_intro)
             
@@ -420,7 +420,7 @@ class PAController:
             if msg:
                 print(f"[Controller] Speaking Text: {msg} (Voice: {voice})")
                 # UPDATED: Use chained playback
-                intro_path = os.path.join("system_sounds", "intro.wav")
+                intro_path = os.path.join("system_sounds", "intro.mp3")
                 abs_intro = os.path.abspath(intro_path)
                 audio_service.play_announcement(abs_intro, msg, voice=voice)
                 
