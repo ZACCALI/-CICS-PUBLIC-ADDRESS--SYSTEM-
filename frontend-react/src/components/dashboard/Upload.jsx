@@ -178,6 +178,7 @@ const Upload = () => {
 
   // Main Play Function
   const playSound = async (id) => {
+      console.log("[Upload] playSound requested for", id, "Processing:", isProcessing.current);
       if (emergencyActive) {
           setErrorMessage("Emergency Alert is currently active. Audio playback is disabled.");
           setShowErrorModal(true);
@@ -562,11 +563,17 @@ const Upload = () => {
              <div className="space-y-2 max-h-[400px] overflow-y-auto mb-4 pr-1">
                   {filteredFiles.map((file) => {
                       const isLocked = systemState?.active_task && systemState.active_task.data?.user !== (currentUser?.name || 'Admin');
+                      // DEBUG LOGS
+                      // console.log(`[Upload] File: ${file.name}, Locked: ${isLocked}, TaskUser: ${systemState?.active_task?.data?.user}, Me: ${currentUser?.name}`);
+
                       return (
                       <div 
                          key={file.id} 
                          className={`flex items-center justify-between p-3 rounded-lg transition-colors group ${isLocked ? 'cursor-not-allowed opacity-60 bg-gray-50' : 'cursor-pointer'} ${playingId === file.id ? 'bg-primary/5 border border-primary/20' : (!isLocked && 'hover:bg-gray-50 border border-transparent')} ${selectedFiles.has(file.id) ? 'bg-blue-50/50' : ''}`}
-                         onClick={() => !isLocked && playSound(file.id)}
+                         onClick={() => {
+                             console.log(`[Upload] Clicked ${file.name}. Locked? ${isLocked}`);
+                             if (!isLocked) playSound(file.id);
+                         }}
                       >
                           <div className="flex items-center overflow-hidden flex-1">
                               {/* Checkbox */}
