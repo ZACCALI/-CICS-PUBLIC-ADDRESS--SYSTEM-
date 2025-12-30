@@ -381,14 +381,14 @@ class AudioService:
         for t in threads:
             t.join()
 
-    def play_siren(self, zones=None):
+    def play_siren(self, zones=None, volume=0.01):
         """Plays a synthetic emergency siren on specified zones (Pi Speakers)"""
         with self._lock:
             if self._siren_active:
                 return # Already playing
             self._siren_active = True
             self._siren_stop_event.clear()
-            self._siren_volume = 0.01 # Extremely low start to prevent blast
+            self._siren_volume = volume
         
         target_cards = self._get_target_cards(zones)
         print(f"[AudioService] Starting Emergency Siren on cards: {target_cards}")

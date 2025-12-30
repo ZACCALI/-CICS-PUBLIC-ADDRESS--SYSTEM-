@@ -473,8 +473,8 @@ class PAController:
 
         if task.priority == Priority.EMERGENCY:
             self.emergency_mode = True
-            # Play Siren on Pi
-            audio_service.play_siren(zones=['All Zones'])
+            # Play Siren on Pi (Start quiet)
+            audio_service.play_siren(zones=['All Zones'], volume=0.002)
             
             # NOTIFICATION: Emergency Started
             notification_service.create(
@@ -641,8 +641,8 @@ class PAController:
              # SYNC PLAYBACK: Blocks this thread until finished, keeping active_task in UI
              # targets ALSA Card 2 (Pi Speakers) via zones=['All Zones']
              # skip_stop=True allows siren to keep looping in background
-             # We start siren at VERY low volume (0.002) for background effect
-             audio_service.set_siren_volume(0.002)
+             # We start siren at VERY low volume (0.0005) for background effect
+             audio_service.set_siren_volume(0.0005)
              audio_service.play_announcement(None, script, voice='female', zones=['All Zones'], skip_stop=True)
 
              # --- AUTO-UNLOCK DEACTIVATION & VOLUME RAMP ---
