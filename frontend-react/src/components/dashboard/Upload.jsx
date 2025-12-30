@@ -11,8 +11,64 @@ const Upload = () => {
   
   // Audio Player State
   const [playingId, setPlayingId] = useState(null);
+  const [isPaused, setIsPaused] = useState(false); // Track Pause State
   const [currentLogId, setCurrentLogId] = useState(null); 
   const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  
+  const audioRef = useRef(new Audio());
+  // ... other refs ...
+
+  // ... (Lines 45-67 omitted for brevity in call) ...
+
+  const stopPlayback = async () => {
+      // ...
+      if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+      }
+      setPlayingId(null);
+      setIsPaused(false); // Reset
+      setCurrentTime(0);
+      isManuallyPaused.current = false;
+  };
+
+  // ...
+
+  // Listeners
+  useEffect(() => {
+      const audio = audioRef.current;
+      audio.volume = 0; 
+      
+      const onPlay = () => setIsPaused(false);
+      const onPause = () => setIsPaused(true);
+
+      audio.addEventListener('timeupdate', handleTimeUpdate);
+      audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('play', onPlay);
+      audio.addEventListener('pause', onPause);
+      
+      // ...
+
+      return () => {
+          audio.removeEventListener('timeupdate', handleTimeUpdate); // ...
+          audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          audio.removeEventListener('ended', handleEnded);
+          audio.removeEventListener('play', onPlay);
+          audio.removeEventListener('pause', onPause);
+          // ...
+      };
+  }, [files, playingId]); 
+
+  // ...
+
+             <label key={idx} className={`flex items-center space-x-3 p-3 border border-gray-100 rounded-lg transition-all duration-200 shadow-sm ${playingId && !isPaused ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50 cursor-pointer active:scale-95 hover:shadow-md'}`}>
+               <input 
+                 type="checkbox" 
+                 checked={zones[label]}
+                 disabled={!!playingId && !isPaused}
+                 onChange={() => {
   const [duration, setDuration] = useState(0);
   
   const audioRef = useRef(new Audio());
@@ -62,6 +118,7 @@ const Upload = () => {
           audioRef.current.currentTime = 0;
       }
       setPlayingId(null);
+      setIsPaused(false);
       setCurrentTime(0);
       isManuallyPaused.current = false;
   };
@@ -128,6 +185,8 @@ const Upload = () => {
           audio.removeEventListener('timeupdate', handleTimeUpdate);
           audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
           audio.removeEventListener('ended', handleEnded);
+          audio.removeEventListener('play', onPlay);
+          audio.removeEventListener('pause', onPause);
           window.removeEventListener('stop-all-audio', handleStopGlobal);
           audio.pause();
       };
@@ -436,11 +495,11 @@ const Upload = () => {
         <h3 className="text-lg font-semibold text-gray-700 mb-4">Select Target Zones:</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {Object.keys(zones).map((label, idx) => (
-             <label key={idx} className={`flex items-center space-x-3 p-3 border border-gray-100 rounded-lg transition-all duration-200 shadow-sm ${playingId ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50 cursor-pointer active:scale-95 hover:shadow-md'}`}>
+             <label key={idx} className={`flex items-center space-x-3 p-3 border border-gray-100 rounded-lg transition-all duration-200 shadow-sm ${playingId && !isPaused ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50 cursor-pointer active:scale-95 hover:shadow-md'}`}>
                <input 
                  type="checkbox" 
                  checked={zones[label]}
-                 disabled={!!playingId}
+                 disabled={!!playingId && !isPaused}
                  onChange={() => {
                     if (label === 'All Zones') {
                         const newValue = !zones['All Zones'];
