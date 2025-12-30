@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 class AudioService:
     def __init__(self):
         self.current_process = None
-        self.stream_process = None
+        self.stream_process = None # Legacy (Keep to prevent AttributeErrors if referenced elsewhere briefly)
+        self.stream_processes = [] # NEW: List of open pipes for Multizone
+        self._lock = threading.Lock()
         self._lock = threading.Lock()
         self.stream_lock = threading.Lock()
         self.proc_lock = threading.Lock()
@@ -297,54 +299,68 @@ class AudioService:
         pass
 
     def start_streaming(self, zones):
-        """Initializes a persistent aplay pipe for low-latency streaming"""
-        self.stop_streaming() # Only stop existing stream, don't kill the chime!
+        """Initializes persistent play pipes for low-latency streaming on ALL target zones"""
+        self.stop_streaming() # Stop existing
         target_cards = self._get_target_cards(zones)
         if not target_cards: return
         
-        # For simplicity, we stream to the first active card in realtime mode
-        # Multiple card streaming with one pipe requires 'alsaloop' or 'dmix', 
-        # but for individual cards, we'll target the first one.
-        card_id = target_cards[0]
-        device = f"plughw:{card_id},0"
+        print(f"[AudioService] Starting Stream Pipes on cards: {target_cards}")
         
         with self.stream_lock:
-            try:
-                # Use SoX 'play' instead of 'aplay' to get volume control (-v)
-                # -t raw: reading raw PCM
-                # -r 16k: 16kHz
-                # -e signed-integer: PCM format
-                # -b 16: 16-bit
-                # -c 1: Mono
-                # -: read from stdin
-                print(f"[AudioService] Starting Stream Pipe on {device} (Vol: 0.9, 16kHz)")
-                env = os.environ.copy()
-                env["AUDIODEV"] = device
-                self.stream_process = subprocess.Popen(
-                    ['play', '-q', '-v', '0.9', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-'],
-                    stdin=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    env=env
-                )
-            except Exception as e:
-                print(f"[AudioService] Failed to start stream pipe: {e}")
+            self.stream_processes = []
+            
+            for card_id in target_cards:
+                 device = f"plughw:{card_id},0"
+                 try:
+                    print(f"  -> Opening Pipe for {device}")
+                    env = os.environ.copy()
+                    env["AUDIODEV"] = device
+                    # Using SoX for consistent volume control
+                    proc = subprocess.Popen(
+                        ['play', '-q', '-v', '0.9', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-'],
+                        stdin=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                        env=env
+                    )
+                    self.stream_processes.append(proc)
+                 except Exception as e:
+                    print(f"  -> Failed to open pipe for {device}: {e}")
 
     def feed_stream(self, pcm_data):
-        """Feeds raw PCM bytes into the open audio pipe"""
-        if self.stream_process and self.stream_process.stdin:
-            try:
-                self.stream_process.stdin.write(pcm_data)
-                self.stream_process.stdin.flush()
-            except Exception as e:
-                print(f"[AudioService] Stream Feed Error: {e}")
-                self.stop_streaming()
+        """Feeds raw PCM bytes into ALL open audio pipes"""
+        with self.stream_lock:
+             if self.stream_processes:
+                 dead_procs = []
+                 for i, proc in enumerate(self.stream_processes):
+                     try:
+                         if proc.stdin:
+                             proc.stdin.write(pcm_data)
+                             proc.stdin.flush()
+                     except Exception as e:
+                         # Broken pipe?
+                         dead_procs.append(proc)
+                 
+                 # Cleanup dead pipes silently
+                 for p in dead_procs:
+                     if p in self.stream_processes:
+                         self.stream_processes.remove(p)
 
     def stop_streaming(self):
-        """Closes the streaming pipe"""
+        """Closes all streaming pipes"""
         with self.stream_lock:
+            # Close Multi-proc list
+            if self.stream_processes:
+                 print(f"[AudioService] Closing {len(self.stream_processes)} Stream Pipes")
+                 for proc in self.stream_processes:
+                     try:
+                         proc.stdin.close()
+                         proc.terminate()
+                     except: pass
+                 self.stream_processes = []
+            
+            # Legacy cleanup
             if self.stream_process:
-                print("[AudioService] Closing Stream Pipe")
-                try:
+                try: 
                     self.stream_process.stdin.close()
                     self.stream_process.terminate()
                 except: pass
