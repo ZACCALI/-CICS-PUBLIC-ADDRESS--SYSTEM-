@@ -313,7 +313,7 @@ class AudioService:
                 self.stream_process = None
 
     def play_chime_sync(self, zones):
-        """Plays the intro chime on specified zones. Returns immediately."""
+        """Plays the intro chime on specified zones. Blocks until finished."""
         target_cards = self._get_target_cards(zones)
         intro_path = self.system_sounds_dir / "intro.mp3"
         

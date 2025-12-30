@@ -474,6 +474,10 @@ class PAController:
              print(f"[Controller] Playing Intro Chime for Voice Broadcast...")
              audio_service.play_chime_sync(zones)
              
+             # Small delay to ensure chime is fully finished and hardware is ready
+             import time
+             time.sleep(0.5)
+
              # 2. Start the Streaming Pipe
              audio_service.start_streaming(zones)
 

@@ -604,10 +604,8 @@ export const AppProvider = ({ children }) => {
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [broadcastActive, currentUser]);   
 
-  const startBroadcast = async (user, zonesObj) => {
-      try {
-          // 1. NEW: Show preparation state immediately
-          setBroadcastPreparing(true); // UI shows "PLAYING CHIME..."
+          // 1. Show preparation state
+          setBroadcastPreparing(true); 
 
           // 2. Register with Backend Controller (Blocks until Chime finishes)
           const zoneList = Object.keys(zonesObj).filter(k => zonesObj[k]);
@@ -626,7 +624,7 @@ export const AppProvider = ({ children }) => {
           broadcastStartingRef.current = true;
           setTimeout(() => { broadcastStartingRef.current = false; }, 5000);
 
-          // 2. Preemptively stop all other audio 
+          // 3. Preemptively stop all other audio 
           stopSystemPlayback();
           if ('speechSynthesis' in window) window.speechSynthesis.cancel();
           window.dispatchEvent(new Event('stop-all-audio'));
@@ -634,7 +632,7 @@ export const AppProvider = ({ children }) => {
                try { el.pause(); el.currentTime = 0; } catch (e) {}
           });
           
-          // 3. Start Microphone
+          // 4. Start Microphone
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           mediaStreamRef.current = stream;
           setBroadcastStream(stream);
@@ -652,12 +650,9 @@ export const AppProvider = ({ children }) => {
           source.connect(gainNode);
           gainNode.connect(audioCtx.destination);
 
-          // 4. NEW: Wait for Chime (Reduced to 1s for better UX)
-          setBroadcastPreparing(true); // UI shows "PLAYING CHIME..."
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Transition to Active state
           setBroadcastPreparing(false);
-
-          setBroadcastActive(true); // UI shows "STOP BROADCAST"
+          setBroadcastActive(true); // UI shows "STOP BROADCAST" (Speak Now)
           
           return true;
       } catch (err) {
