@@ -117,6 +117,15 @@ def setup_piper():
         else:
             print("Failed to download Piper binary.")
             return False
+            
+    # Ensure Executable Permission (Linux/Mac)
+    if system != "Windows" and executable_path.exists():
+        try:
+            st = os.stat(executable_path)
+            os.chmod(executable_path, st.st_mode | 0o111) # Add +x
+            print(f"Set execute permissions on {executable_path}")
+        except Exception as e:
+            print(f"Warning: Failed to set permissions on {executable_path}: {e}")
     else:
         print("Piper binary appears to be already present.")
 
