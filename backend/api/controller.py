@@ -587,11 +587,15 @@ class PAController:
             voice = task.data.get('voice', 'female') # Default to female
             
             if msg:
-                print(f"[Controller] Speaking Text: {msg} (Voice: {voice})")
+                zones = task.data.get('zones', [])
+                if isinstance(zones, str):
+                     zones = [z.strip() for z in zones.split(',')]
+                     
+                print(f"[Controller] Speaking Text: {msg} (Voice: {voice}) Zones: {zones}")
                 # UPDATED: Use chained playback
                 intro_path = os.path.join("system_sounds", "intro.mp3")
                 abs_intro = os.path.abspath(intro_path)
-                audio_service.play_announcement(abs_intro, msg, voice=voice)
+                audio_service.play_announcement(abs_intro, msg, voice=voice, zones=zones)
                 
                 # NOTIFICATION: Text Broadcast Started
                 notification_service.create(
