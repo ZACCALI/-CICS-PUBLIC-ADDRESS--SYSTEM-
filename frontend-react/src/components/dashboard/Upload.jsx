@@ -24,6 +24,15 @@ const Upload = () => {
 
 
 
+
+  const handleTimeUpdate = () => {
+    setCurrentTime(audioRef.current.currentTime);
+  };
+
+  const handleLoadedMetadata = () => {
+    setDuration(audioRef.current.duration);
+  };
+
   const handleEnded = () => {
       // Auto-Next Logic
       const currentIndex = files.findIndex(f => f.id === playingId);
