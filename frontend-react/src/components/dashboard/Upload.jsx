@@ -100,12 +100,17 @@ const Upload = () => {
       const audio = audioRef.current;
       audio.volume = 0; // STRICTLY MUTE LOCAL PLAYBACK (Plays on Pi)
       
+      const onPlay = () => setIsPaused(false);
+      const onPause = () => setIsPaused(true);
+
       // These handlers are already defined above, but we need to attach them to the audio element.
       // Re-defining them here would create new functions on each render, which is not ideal.
       // Instead, we attach the top-level handlers.
       audio.addEventListener('timeupdate', handleTimeUpdate);
       audio.addEventListener('loadedmetadata', handleLoadedMetadata);
       audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('play', onPlay);
+      audio.addEventListener('pause', onPause);
       
       const handleStopGlobal = () => {
           // INTERRUPTION LOGIC: Just pause, don't clear state (so we can resume)
