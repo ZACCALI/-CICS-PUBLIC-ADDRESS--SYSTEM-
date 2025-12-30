@@ -190,6 +190,12 @@ class PAController:
 
             # Logic: Higher Priority WINS OR (Equal Priority AND Same User WINS)
             if new_task.priority > current_pri or (new_task.priority == current_pri and is_same_user):
+                # FRESH START: If it's a new Background Music request, reset the resume offset
+                if new_task.type == TaskType.BACKGROUND:
+                    print("[Controller] Resetting Background Resume Point for New Request.")
+                    self.background_resume_time = 0
+                    self.background_play_start = None
+
                 # PREEMPTION
                 self._preempt_current_task(new_task.priority)
                 self._start_task(new_task)

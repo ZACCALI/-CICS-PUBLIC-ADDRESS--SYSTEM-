@@ -8,8 +8,8 @@
 - [x] Fix auto-pause loop issue <!-- id: 1 -->
 - [x] Fix seeking issue (clicking on timeline) <!-- id: 2 -->
 - [x] Fix interruption resume logic <!-- id: 3 -->
-- [/] Verify fixes on Raspberry Pi setup (simulated or logic-based) <!-- id: 4 -->
-- [/] Push changes to GitHub <!-- id: 5 -->
+- [x] Verify fixes on Raspberry Pi setup (simulated or logic-based) <!-- id: 4 -->
+- [x] Push changes to GitHub <!-- id: 5 -->
 - [ ] **Verification**
     - [ ] Verify "Clear All" persists (already implemented `cleared_by`, check logic).
     - [ ] Verify Red Dot appears for new items and disappears on open.

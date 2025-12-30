@@ -153,9 +153,10 @@ const Upload = () => {
              if (isMyUser && audioRef.current.paused && !isManuallyPaused.current) {
                  console.log("[Resume Logic] Auto-Resuming Background Music for", currentUserName);
                  audioRef.current.play().catch(e => console.error("Resume failed", e));
-             } else if (!isMyUser) {
-                 // If background but NOT mine, ensure I am paused/stopped?
-                 // We rely on standard behavior.
+             } else if (audioRef.current && !audioRef.current.paused && isManuallyPaused.current) {
+                 // Safety: If it's playing but we are manually paused, pause it.
+                 console.log("[Resume Logic] Enforcing Manual Pause");
+                 audioRef.current.pause();
              }
           } else {
               // Higher priority task active (Voice/Schedule) -> PAUSE
@@ -252,6 +253,17 @@ const Upload = () => {
                  await audioRef.current.play();
                  setPlayingId(id);
                  startTimeRef.current = Date.now();
+                 isManuallyPaused.current = false;
+                 setCurrentTime(0);
+
+                 // Tell backend to start FRESH
+                 await api.post('/realtime/start', {
+                     user: currentUser?.name || 'Admin',
+                     zones: ['All Zones'], 
+                     type: 'background',
+                     content: fileToPlay.name,
+                     start_time: 0
+                 });
                  
                  // Log activity
              try {
