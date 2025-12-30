@@ -4,6 +4,7 @@ import threading
 import platform
 import uuid
 import logging
+import json
 from pathlib import Path
 
 # Configure logging
@@ -16,14 +17,28 @@ class AudioService:
         self._lock = threading.Lock()
         
         # Piper Setup
-        # Assuming piper_tts is in backend/piper_tts, and this file is in backend/api/
         self.base_dir = Path(__file__).resolve().parent.parent / "piper_tts"
         self.os_type = platform.system()
         self.piper_exe = self._find_piper_executable()
         self.voices = self._scan_voices()
         
+        # ZONE CONFIGURATION
+        self.zones_config = self._load_zones_config()
+        
         if not self.piper_exe:
             print("[AudioService] Warning: Piper TTS not found. Using System Fallback.")
+
+    def _load_zones_config(self):
+        """Loads zone mapping from zones_config.json"""
+        try:
+            config_path = Path(__file__).resolve().parent.parent / "zones_config.json"
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    print(f"[AudioService] Loaded zones from {config_path}")
+                    return json.load(f)
+        except Exception as e:
+            print(f"[AudioService] Failed to load zones: {e}")
+        return {}
 
     def _find_piper_executable(self):
         """Finds the piper executable."""
@@ -80,9 +95,6 @@ class AudioService:
         try:
             cmd = [self.piper_exe, "--model", model_path, "--output_file", str(output_file)]
             
-            # Allow clean cleanup of old files? 
-            # For now, we generate new ones. Ideally we need a cleanup job.
-            
             process = subprocess.Popen(
                 cmd, 
                 stdin=subprocess.PIPE, 
@@ -101,185 +113,165 @@ class AudioService:
             print(f"[AudioService] Piper Exception: {e}")
             return None
 
-    def play_text(self, text: str, voice: str = "female"):
-        """Plays text using Piper (or Windows Fallback)"""
+    def play_announcement(self, intro_path, text, voice="female", zones=[]):
+        """Plays Intro + TTS on specific zones"""
         self.stop()
-        print(f"[AudioService] Speaking: {text} (Voice: {voice})")
+        print(f"[AudioService] Announcement: '{text}' -> Zones: {zones}")
         
-        # 1. Try Piper
+        # 1. Generate TTS
         wav_path = self._generate_piper_audio(text, voice)
-        
-        if wav_path:
-            # Play generated WAV
-            self.play_file(wav_path)
+        if not wav_path:
+            # System Fallback (Windows only usually)
+            self.play_text(text, voice) 
             return
 
-        # 2. Fallback to Windows TTS
-        safe_text = text.replace("'", "''")
-        command = [
-            'powershell', 
-            '-Command', 
-            f"Add-Type –AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{safe_text}')"
-        ]
-        self._run_command(command)
-
-    def play_intro(self, file_path: str):
-        """Plays the intro chime synchronously"""
-        self.stop()
-        print(f"[AudioService] Playing Intro: {file_path}")
+        # 2. Determine Output Devices
+        target_cards = self._get_target_cards(zones)
         
-        if not os.path.exists(file_path):
-            fallback_script = "[console]::beep(800, 400); Start-Sleep -Milliseconds 100; [console]::beep(600, 600)"
-            self._run_command(['powershell', '-c', fallback_script])
+        # 3. Play on Targets
+        self._play_multizone(intro_path, wav_path, target_cards)
+
+    def _get_target_cards(self, zones):
+        """Maps logical zones (names) to ALSA card IDs"""
+        cards = set()
+        
+        # If 'All Zones' or empty, play on all relevant cards
+        if not zones or "All Zones" in zones:
+            for v in self.zones_config.values():
+                if isinstance(v, list): cards.update(v)
+                else: cards.add(v)
+            if not cards: cards.add(0) # Default to 0
+            return list(cards)
+
+        # Specific Zones
+        for z in zones:
+            # Fuzzy match or exact match from config
+            for config_name, card_id in self.zones_config.items():
+                if z.lower() in config_name.lower():
+                    if isinstance(card_id, list): cards.update(card_id)
+                    else: cards.add(card_id)
+        
+        if not cards: cards.add(0) # Fallback
+        return list(cards)
+
+    def _play_multizone(self, intro, body, card_ids):
+        """Plays audio sequence on list of cards (Linux) or default (Windows)"""
+        
+        if self.os_type == "Windows":
+            # Windows: Just play on default (Development Mode)
+            print("[AudioService] Windows Mode: Playing on Default Device")
+            self._play_sequence_windows(intro, body)
             return
 
-        safe_path = file_path.replace("'", "''")
+        # Linux / Raspberry Pi: Correct Multizone Logic
+        threads = []
+        for card_id in card_ids:
+            t = threading.Thread(target=self._play_sequence_linux, args=(intro, body, card_id))
+            threads.append(t)
+            t.start()
+        
+        for t in threads:
+            t.join()
+
+    def _play_sequence_linux(self, intro, body, card_id):
+        """Plays Intro -> Body on specific ALSA card"""
+        device = f"plughw:{card_id},0"
+        try:
+            # 1. Intro
+            subprocess.run(['aplay', '-D', device, intro], check=True)
+            # 2. Body
+            subprocess.run(['aplay', '-D', device, body], check=True)
+        except Exception as e:
+            print(f"[AudioService] Linux Playback Error on Card {card_id}: {e}")
+
+    def _play_sequence_windows(self, intro, body):
+        """Windows Powershell sequence"""
+        safe_intro = str(intro).replace("'", "''")
+        safe_body = str(body).replace("'", "''")
+        
         ps_script = f"""
         Add-Type -AssemblyName PresentationCore, PresentationFramework;
         $p = New-Object System.Windows.Media.MediaPlayer;
-        $p.Open('{safe_path}');
+        $p.Open('{safe_intro}');
         $attempts = 20; 
         while (-not $p.NaturalDuration.HasTimeSpan -and $attempts -gt 0) {{ Start-Sleep -Milliseconds 100; $attempts--; }}
         $p.Play();
         if ($p.NaturalDuration.HasTimeSpan) {{
             while ($p.Position -lt $p.NaturalDuration.TimeSpan) {{ Start-Sleep -Milliseconds 100; }}
-        }} else {{ Start-Sleep -Seconds 4; }}
+        }} else {{ Start-Sleep -Seconds 2; }}
         $p.Close();
+        
+        (New-Object Media.SoundPlayer '{safe_body}').PlaySync();
         """
-        try:
-            subprocess.run(['powershell', '-c', ps_script], check=True)
-        except Exception as e:
-            print(f"[AudioService] Intro playback failed: {e}")
+        self._run_command(['powershell', '-c', ps_script])
+
+    def play_text(self, text: str, voice: str = "female"):
+        """Simple text playback (Testing/Emergency)"""
+        self.stop()
+        wav = self._generate_piper_audio(text, voice)
+        if wav:
+            # Default to Card 0 for simple tests
+            if self.os_type == "Windows":
+                 self.play_file(wav)
+            else:
+                 subprocess.run(['aplay', '-D', 'plughw:0,0', wav])
+        else:
+            print("[AudioService] Failed to generate TTS.")
+
+    # ... (Keep existing play_intro_async, play_file, stop, _run_command helper methods intact or simplified) ...
+    # Integrating critical existing helpers below for compatibility:
+
+    def play_intro_async(self, file_path: str):
+         """Plays intro asynchronously (Windows only visual supported, Linux fire-and-forget)"""
+         self.stop()
+         if self.os_type == "Windows":
+             safe_path = str(file_path).replace("'", "''")
+             ps_script = f"""
+             Add-Type -AssemblyName PresentationCore, PresentationFramework;
+             $p = New-Object System.Windows.Media.MediaPlayer;
+             $p.Open('{safe_path}');
+             $p.Play();
+             Start-Sleep -Seconds 3;
+             $p.Close();
+             """
+             self._run_command(['powershell', '-c', ps_script])
+         else:
+             # Linux Async
+             subprocess.Popen(['aplay', '-D', 'plughw:0,0', file_path])
 
     def play_file(self, file_path: str):
-        """Plays audio file using PowerShell"""
-        self.stop() 
-        safe_path = file_path.replace("'", "''")
-        
-        if file_path.lower().endswith('.wav'):
-             command = ['powershell', '-c', f"(New-Object Media.SoundPlayer '{safe_path}').PlaySync()"]
+        self.stop()
+        if self.os_type == "Windows":
+            safe_path = str(file_path).replace("'", "''")
+            self._run_command(['powershell', '-c', f"(New-Object Media.SoundPlayer '{safe_path}').PlaySync()"])
         else:
-             ps_script = f"""
-                Add-Type -AssemblyName PresentationCore, PresentationFramework;
-                $p = New-Object System.Windows.Media.MediaPlayer;
-                $p.Open('{safe_path}');
-                $attempts = 20; 
-                while (-not $p.NaturalDuration.HasTimeSpan -and $attempts -gt 0) {{ Start-Sleep -Milliseconds 100; $attempts--; }}
-                $p.Play();
-                if ($p.NaturalDuration.HasTimeSpan) {{
-                    while ($p.Position -lt $p.NaturalDuration.TimeSpan) {{ Start-Sleep -Milliseconds 500 }}
-                }} else {{ Start-Sleep -Seconds 10; }}
-                $p.Close();
-             """
-             command = ['powershell', '-c', ps_script]
-        
-        self._run_command(command)
+            subprocess.run(['aplay', '-D', 'plughw:0,0', file_path])
 
     def stop(self):
-        """Stops the currently running audio process"""
         with self._lock:
             if self.current_process:
-                print("[AudioService] Stopping Audio...")
-                try:
-                    self.current_process.terminate()
-                except:
-                    pass
+                try: self.current_process.terminate()
+                except: pass
                 self.current_process = None
+            # Linux: killall aplay? A bit aggressive but effective for "Stop" button.
+            if self.os_type != "Windows":
+                os.system("killall -q aplay")
 
     def _run_command(self, command):
+        """Threaded command runner for Windows"""
         def target():
             proc = None
             with self._lock:
                 try:
                     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                     self.current_process = proc
-                except Exception as e:
-                    print(f"[AudioService] Exception starting process: {e}")
-                    return
-
+                except: return
             if proc:
-                try:
-                    stdout, stderr = proc.communicate()
-                    if stderr: print(f"[AudioService] Process Error: {stderr}")
+                try: proc.communicate()
                 except: pass
                 finally:
                     with self._lock:
                         if self.current_process == proc: self.current_process = None
-
-        thread = threading.Thread(target=target)
-        thread.start()
-
-    def play_announcement(self, intro_path: str, text: str, voice: str = "female"):
-        """Plays Intro Chime followed by Piper TTS"""
-        self.stop()
-        print(f"[AudioService] Announcing: Intro -> '{text}' (Voice: {voice})")
-
-        # 1. Generate Piper Audio FIRST (Blocking, but fast-ish)
-        wav_path = self._generate_piper_audio(text, voice)
-        
-        # 2. Construct Script
-        safe_intro = intro_path.replace("'", "''")
-        
-        if wav_path:
-            safe_wav = wav_path.replace("'", "''")
-            # Play Intro (MediaPlayer) -> Play Wav (SoundPlayer)
-            ps_script = f"""
-            Add-Type -AssemblyName PresentationCore, PresentationFramework;
-            
-            # 1. Play Intro
-            $p = New-Object System.Windows.Media.MediaPlayer;
-            $p.Open('{safe_intro}');
-            $attempts = 20; 
-            while (-not $p.NaturalDuration.HasTimeSpan -and $attempts -gt 0) {{ Start-Sleep -Milliseconds 100; $attempts--; }}
-            $p.Play();
-            if ($p.NaturalDuration.HasTimeSpan) {{
-                while ($p.Position -lt $p.NaturalDuration.TimeSpan) {{ Start-Sleep -Milliseconds 100; }}
-            }} else {{ Start-Sleep -Seconds 4; }}
-            $p.Close();
-            
-            # 2. Play TTS Wav
-            (New-Object Media.SoundPlayer '{safe_wav}').PlaySync();
-            """
-        else:
-            # Fallback to System TTS
-            safe_text = text.replace("'", "''")
-            ps_script = f"""
-            Add-Type -AssemblyName PresentationCore, PresentationFramework;
-            Add-Type -AssemblyName System.Speech;
-            
-            $p = New-Object System.Windows.Media.MediaPlayer;
-            $p.Open('{safe_intro}');
-            $attempts = 20;
-            while (-not $p.NaturalDuration.HasTimeSpan -and $attempts -gt 0) {{ Start-Sleep -Milliseconds 100; $attempts--; }}
-            $p.Play();
-            if ($p.NaturalDuration.HasTimeSpan) {{
-                while ($p.Position -lt $p.NaturalDuration.TimeSpan) {{ Start-Sleep -Milliseconds 100; }}
-            }} else {{ Start-Sleep -Seconds 4; }}
-            $p.Close();
-            
-            # Fallback TTS
-            $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer;
-            $synth.Speak('{safe_text}');
-            """
-
-        self._run_command(['powershell', '-c', ps_script])
-
-    def play_intro_async(self, file_path: str):
-         """Plays intro asynchronously"""
-         self.stop()
-         safe_path = file_path.replace("'", "''")
-         ps_script = f"""
-         Add-Type -AssemblyName PresentationCore, PresentationFramework;
-         $p = New-Object System.Windows.Media.MediaPlayer;
-         $p.Open('{safe_path}');
-         $attempts = 20; 
-         while (-not $p.NaturalDuration.HasTimeSpan -and $attempts -gt 0) {{ Start-Sleep -Milliseconds 100; $attempts--; }}
-         $p.Play();
-         if ($p.NaturalDuration.HasTimeSpan) {{
-            while ($p.Position -lt $p.NaturalDuration.TimeSpan) {{ Start-Sleep -Milliseconds 100; }}
-         }} else {{ Start-Sleep -Seconds 4; }}
-         $p.Close();
-         """
-         self._run_command(['powershell', '-c', ps_script])
+        threading.Thread(target=target).start()
 
 audio_service = AudioService()

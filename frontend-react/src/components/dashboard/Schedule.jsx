@@ -677,7 +677,6 @@ const Schedule = () => {
       >
         <form className="space-y-4 max-h-[60vh] md:max-h-[70vh] overflow-y-auto px-1">
             
-            {/* AI Wizard Section */}
 
 
             {/* Unified Input Section */}
@@ -692,11 +691,22 @@ const Schedule = () => {
                         className="w-full p-3 border border-gray-200 rounded-lg focus:ring-primary focus:border-primary min-h-[100px] pr-12"
                         placeholder="Type message here or use microphone to speak..."
                     ></textarea>
-                    
 
-
-
+                    <button
+                        type="button"
+                        onClick={handleSmartSchedule}
+                        disabled={isWizardLoading}
+                        className={`absolute bottom-3 right-3 p-2 rounded-full shadow-sm transition-all duration-300 ${isWizardLoading ? 'bg-purple-600 text-white shadow-purple-200 shadow-lg scale-110' : 'bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700'}`}
+                        title="Smart Auto-Fill"
+                    >
+                        <i className={`material-icons text-xl ${isWizardLoading ? 'animate-pulse' : ''}`}>auto_fix_high</i>
+                    </button>
                 </div>
+
+                <p className="text-xs text-gray-400 mt-1 flex items-center justify-end">
+                    <i className="material-icons text-[14px] mr-1 text-purple-400">auto_fix_high</i> 
+                    Type a command (e.g., "Announce Meeting tomorrow 9am") and click the wand.
+                </p>
 
 
 

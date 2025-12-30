@@ -30,11 +30,17 @@ app.include_router(real_time_announcements_router)
 app.include_router(scheduled_announcements_router)
 app.include_router(manage_account_router)
 app.include_router(emergency_route)
+app.include_router(files_router)
+
+# Import and include the AI Router for Smart Scheduler
+from api.routes.ai import ai_router
+app.include_router(ai_router)
+app.include_router(manage_account_router)
+app.include_router(emergency_route)
 app.include_router(files_router, prefix="/files", tags=["Files"])
 from api.routes.notifications import notifications_router
 app.include_router(notifications_router)
-from api.routes.ai import ai_router
-app.include_router(ai_router)
+
 
 # Mount Media Directory
 if not os.path.exists("media"):
@@ -48,11 +54,37 @@ from api.audio_service import audio_service
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    logger.info("Starting up Device Heartbeat...")
+    
+    stop_event = threading.Event()
+    
+    def heartbeat():
+        from api.firebaseConfig import db, firestore_server_timestamp
+        while not stop_event.is_set():
+            try:
+                # Update 'devices/pi-main' document
+                db.collection('devices').document('pi-main').set({
+                    'status': 'online',
+                    'last_heartbeat': firestore_server_timestamp(),
+                    'type': 'backend'
+                }, merge=True)
+                # Sleep 30s
+            except Exception as e:
+                print(f"[Heartbeat] Error: {e}")
+            
+            # Sleep in chunks to allow fast exit
+            for _ in range(30):
+                if stop_event.is_set(): break
+                time.sleep(1)
+
+    t = threading.Thread(target=heartbeat, daemon=True)
+    t.start()
+    
     yield
     # Shutdown
-    print("[LifeSpan] Shutting down audio service...")
+    print("[LifeSpan] Shutting down services...")
+    stop_event.set()
     try:
         audio_service.stop()
     except Exception as e:
-        # Suppress CancelledError or other cleanup errors during forced shutdown
         print(f"[LifeSpan] Cleanup skipped or failed: {e}")
