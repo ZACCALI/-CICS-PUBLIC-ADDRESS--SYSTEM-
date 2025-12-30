@@ -15,6 +15,7 @@ class AudioService:
     def __init__(self):
         self.current_process = None
         self.stream_process = None
+        self._lock = threading.Lock()
         self.stream_lock = threading.Lock()
         
         # Piper Setup
@@ -267,14 +268,24 @@ class AudioService:
         
         with self.stream_lock:
             try:
-                print(f"[AudioService] Starting Stream Pipe on {device} (16kHz)")
+                # Use SoX 'play' instead of 'aplay' to get volume control (-v)
+                # -t raw: reading raw PCM
+                # -r 16k: 16kHz
+                # -e signed-integer: PCM format
+                # -b 16: 16-bit
+                # -c 1: Mono
+                # -: read from stdin
+                print(f"[AudioService] Starting Stream Pipe on {device} (Vol: 0.7, 16kHz)")
+                env = os.environ.copy()
+                env["AUDIODEV"] = device
                 self.stream_process = subprocess.Popen(
-                    ['aplay', '-D', device, '-r', '16000', '-f', 'S16_LE', '-c', '1'],
+                    ['play', '-q', '-v', '0.7', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-'],
                     stdin=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
+                    env=env
                 )
             except Exception as e:
-                print(f"[AudioService] Failed to start stream: {e}")
+                print(f"[AudioService] Failed to start stream pipe: {e}")
 
     def feed_stream(self, pcm_data):
         """Feeds raw PCM bytes into the open audio pipe"""

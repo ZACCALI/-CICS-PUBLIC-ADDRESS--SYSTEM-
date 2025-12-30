@@ -18,6 +18,13 @@ Modify the notification system to support per-user "Clearing" of notifications (
 - *Alternatively*: just use the existing `mark_as_read` in a loop (simpler for MVP).
 - **Trigger**: Called when User clicks the Bell Icon.
 
+### Backend - Audio Engine
+
+#### [MODIFY] [audio_service.py](file:///c:/Users/msu-wone/Desktop/-CICS-CAPSTONE-PROJECT--main%20-%20Copy/backend/api/audio_service.py)
+- **Volume Attenuation**: Switch from `aplay` to `play` (SoX) in the streaming pipe to enable the `-v` flag.
+- **Default 0.7**: Set the default broadcast volume to `0.7` (70%) to address the "too loud" feedback.
+- **Direct Pipe**: `play -q -v 0.7 -t raw -r 16000 -e signed-integer -b 16 -c 1 -`.
+
 ### Frontend (`frontend-react/`)
 
 #### [MODIFY] `src/context/AppContext.jsx`
@@ -34,6 +41,14 @@ Modify the notification system to support per-user "Clearing" of notifications (
     - On Click (Open Dropdown) -> Call `markAllAsRead` -> Badge disappears.
 
 ## Verification Plan
+
+### Automated Tests
+- Create `test_broadcast.py` to simulate a voice session.
+- Check logs for "Starting Stream Pipe on ... (Vol: 0.7)".
+
+### Manual Verification
+1. **The Volume Test**: Start a broadcast. The loudness should be significantly lower and more comfortable.
+2. **Stutter Check**: Ensure the switch to SoX doesn't introduce lag (SoX is usually very efficient for raw streams).
 1.  **Shared Test**: Create a System Notification (e.g., Device Online).
     - User A "Clears" it. It should disappear for User A.
     - User B logs in. It should STILL be visible for User B.
