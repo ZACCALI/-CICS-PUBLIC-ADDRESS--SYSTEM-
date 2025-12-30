@@ -10,20 +10,17 @@ from api.routes.files import router as files_router
 from fastapi.staticfiles import StaticFiles
 import os
 
-app = FastAPI()
+from fastapi.responses import FileResponse
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
 
 app.include_router(auth_router)
 app.include_router(real_time_announcements_router)
@@ -35,60 +32,45 @@ app.include_router(files_router)
 # Import and include the AI Router for Smart Scheduler
 from api.routes.ai import ai_router
 app.include_router(ai_router)
-app.include_router(manage_account_router)
-app.include_router(emergency_route)
-app.include_router(files_router, prefix="/files", tags=["Files"])
-from api.routes.notifications import notifications_router
-app.include_router(notifications_router)
-
+# Removed duplicate includes
 
 # Mount Media Directory
 if not os.path.exists("media"):
     os.makedirs("media")
 app.mount("/media", StaticFiles(directory="media"), name="media")
 
-# Graceful Shutdown
-from contextlib import asynccontextmanager
-from api.audio_service import audio_service
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    logger.info("Starting up Device Heartbeat...")
-    
-    stop_event = threading.Event()
-    
-    def heartbeat():
-        from api.firebaseConfig import db, firestore_server_timestamp
-        while not stop_event.is_set():
-            try:
-                # Update 'devices/pi-main' document
-                db.collection('devices').document('pi-main').set({
-                    'status': 'online',
-                    'last_heartbeat': firestore_server_timestamp(),
-                    'type': 'backend'
-                }, merge=True)
-                # Sleep 30s
-            except Exception as e:
-                print(f"[Heartbeat] Error: {e}")
-            
-            # Sleep in chunks to allow fast exit
-            for _ in range(30):
-                if stop_event.is_set(): break
-                time.sleep(1)
+# --- FRONTEND HOSTING (SPA) ---
+# Serve the React App from 'frontend-react/dist'
+frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend-react", "dist")
 
-    t = threading.Thread(target=heartbeat, daemon=True)
-    t.start()
-    
-    yield
-    # Shutdown
-    print("[LifeSpan] Shutting down services...")
-    stop_event.set()
-    try:
-        audio_service.stop()
-    except Exception as e:
-        print(f"[LifeSpan] Cleanup skipped or failed: {e}")
+if os.path.exists(frontend_dist):
+    # 1. Mount Assets (JS/CSS)
+    assets_path = os.path.join(frontend_dist, "assets")
+    if os.path.exists(assets_path):
+        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+    # 2. Catch-All Route for React Router
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        # Build path to potential file
+        file_path = os.path.join(frontend_dist, full_path)
+        
+        # If file exists (e.g. favicon.ico, manifest.json, robots.txt), serve it
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        # Otherwise, serve index.html (SPA Fallback)
+        # This allows routes like /dashboard/schedule to work on refresh
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
+else:
+    print("[WARNING] Frontend build not found. Run 'npm run build' in frontend-react/ folder to enable local hosting.")
+    @app.get("/")
+    def read_root():
+        return {"message": "Backend Running. Frontend not built."}
+
 
 if __name__ == "__main__":
     import uvicorn
+    # Host 0.0.0.0 allows access from other devices on the network
     uvicorn.run(app, host="0.0.0.0", port=8000)
