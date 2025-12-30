@@ -276,7 +276,9 @@ class AudioService:
                 print(f"[AudioService] SoX Play {device} (Ch: {channel or 'Stereo'})")
                 
                 # Force 2 Channels Output so 'remix' 1 0 / 0 1 works reliably
-                base_args = ['-v', '0.9', '--channels', '2']
+                # NOTE: Only use -c 2 if putting it AFTER input, but play syntax is tricky.
+                # Safer to let SoX handle input format and just use remix.
+                base_args = ['-v', '0.9']
 
                 # 1. Intro
                 if intro:
@@ -377,10 +379,8 @@ class AudioService:
                     env = os.environ.copy()
                     env["AUDIODEV"] = device
                     
-                    # Force output 2 channels so remix works
                     # -c 1 (Input is mono 16k)
-                    # --channels 2 (Output forced to stereo)
-                    cmd = ['play', '-q', '-v', '0.9', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-', '--channels', '2']
+                    cmd = ['play', '-q', '-v', '0.9', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-']
                     cmd = cmd + remix_flags
                     
                     proc = subprocess.Popen(
