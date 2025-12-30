@@ -84,7 +84,9 @@ async def lifespan(app: FastAPI):
     # Shutdown
     print("[LifeSpan] Shutting down services...")
     stop_event.set()
-    try:
-        audio_service.stop()
     except Exception as e:
         print(f"[LifeSpan] Cleanup skipped or failed: {e}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
