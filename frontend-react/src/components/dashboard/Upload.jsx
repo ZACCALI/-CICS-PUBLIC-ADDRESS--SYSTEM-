@@ -5,7 +5,7 @@ import Modal from '../common/Modal';
 import api from '../../api/axios';
 
 const Upload = () => {
-  const { files, addFile, deleteFile, logActivity, updateLog, emergencyActive, systemState, zones } = useApp();
+  const { files, addFile, deleteFile, logActivity, updateLog, emergencyActive, systemState, zones, setZones } = useApp();
   const { currentUser } = useAuth();
   const fileInputRef = useRef(null);
   
@@ -431,6 +431,39 @@ const Upload = () => {
                 </div>
             </div>
         )}
+
+       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h3 className="text-lg font-semibold text-gray-700 mb-4">Select Target Zones:</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {Object.keys(zones).map((label, idx) => (
+             <label key={idx} className="flex items-center space-x-3 p-3 border border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md">
+               <input 
+                 type="checkbox" 
+                 checked={zones[label]}
+                 onChange={() => {
+                    if (label === 'All Zones') {
+                        const newValue = !zones['All Zones'];
+                        const newZones = {};
+                        Object.keys(zones).forEach(k => newZones[k] = newValue);
+                        setZones(newZones);
+                    } else {
+                        const newValue = !zones[label];
+                        const newZones = { ...zones, [label]: newValue };
+                        if (!newValue) newZones['All Zones'] = false;
+                        else {
+                            const allOthers = Object.keys(newZones).filter(k => k !== 'All Zones' && k !== label).every(k => newZones[k]);
+                            if (allOthers) newZones['All Zones'] = true;
+                        }
+                        setZones(newZones);
+                    }
+                 }}
+                 className="w-5 h-5 text-primary rounded focus:ring-primary border-gray-300 transition-colors" 
+               />
+               <span className="text-gray-700 font-medium truncate text-sm sm:text-base">{label}</span>
+             </label>
+          ))}
+        </div>
+      </div>
 
       <div 
         onClick={() => fileInputRef.current.click()}
