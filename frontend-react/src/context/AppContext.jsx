@@ -207,41 +207,9 @@ export const AppProvider = ({ children }) => {
   const broadcastStartingRef = useRef(false); // Grace period flag
 
   const playEmergencySiren = () => {
-      // Prevent double-start
-      if (emergencyAudioRef.current) return;
-
-      try {
-          const AudioContext = window.AudioContext || window.webkitAudioContext;
-          const ctx = new AudioContext();
-          emergencyAudioRef.current = ctx;
-
-          const oscillator = ctx.createOscillator();
-          const gainNode = ctx.createGain();
-
-          oscillator.type = 'sine';
-          oscillator.frequency.value = 600; 
-          
-          // SAFETY: Muted locally (Backend now plays siren on Pi)
-          gainNode.gain.value = 0; 
-          
-          oscillator.connect(gainNode);
-          gainNode.connect(ctx.destination);
-          
-          oscillator.start();
-          
-          // Siren Pulse Effect
-          let isHigh = false;
-          sirenIntervalRef.current = setInterval(() => {
-              if (ctx.state === 'closed') return;
-              const now = ctx.currentTime;
-              const freq = isHigh ? 600 : 900; 
-              oscillator.frequency.setValueAtTime(freq, now);
-              isHigh = !isHigh;
-          }, 800); 
-
-      } catch (e) {
-          console.error("Siren start failed", e);
-      }
+      // FRONTEND SIREN REMOVED: Audio is handled exclusively by Backend (Pi Speakers)
+      // This function now does nothing but is kept to satisfy any hook dependencies if any.
+      console.log("Frontend Siren: Disabled (Backend handling audio)");
   };
 
   const stopEmergencySiren = () => {
@@ -249,15 +217,7 @@ export const AppProvider = ({ children }) => {
           clearInterval(sirenIntervalRef.current);
           sirenIntervalRef.current = null;
       }
-      
-      if (emergencyAudioRef.current) {
-          try {
-              emergencyAudioRef.current.close();
-          } catch(e) {
-              console.error("Siren close error", e);
-          }
-          emergencyAudioRef.current = null;
-      }
+      // Audio Context removed
   };
 
   // Centralized Emergency Audio Effect
