@@ -343,6 +343,49 @@ class AudioService:
         for t in threads:
             t.join()
 
+    def play_siren(self, zones=None):
+        """Plays a synthetic emergency siren on specified zones (Pi Speakers)"""
+        self.stop()
+        target_cards = self._get_target_cards(zones)
+        
+        print(f"[AudioService] Starting Emergency Siren on cards: {target_cards}")
+        
+        def run_siren():
+            # Create a dedicated process for the siren sweep
+            # We use a loop in a thread to keep it going
+            while True:
+                threads = []
+                for card_id in target_cards:
+                    def play_on_card(cid):
+                        device = f"plughw:{cid},0"
+                        env = os.environ.copy()
+                        env["AUDIODEV"] = device
+                        # SoX Synth: 2 second sweep from 600Hz to 1200Hz
+                        try:
+                            # Use Popen so we can track and kill if needed, 
+                            # but run.wait() is easier in this thread loop.
+                            subprocess.run(['play', '-q', '-n', 'synth', '2', 'sine', '600:1200'], 
+                                           env=env, stderr=subprocess.DEVNULL)
+                        except: pass
+
+                    t = threading.Thread(target=play_on_card, args=(card_id,))
+                    threads.append(t)
+                    t.start()
+                
+                for t in threads:
+                    t.join()
+                
+                # Check if we should stop
+                with self._lock:
+                    if not self.current_process: # Threading reuse of current_process flag
+                        break
+
+        # Start the siren loop thread
+        siren_thread = threading.Thread(target=run_siren, daemon=True)
+        with self._lock:
+            self.current_process = siren_thread # Track the thread as the 'process'
+        siren_thread.start()
+
     def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""
         self.stop()

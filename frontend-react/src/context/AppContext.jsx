@@ -221,8 +221,8 @@ export const AppProvider = ({ children }) => {
           oscillator.type = 'sine';
           oscillator.frequency.value = 600; 
           
-          // SAFETY: Limit volume to 10%
-          gainNode.gain.value = 0.1; 
+          // SAFETY: Muted locally (Backend now plays siren on Pi)
+          gainNode.gain.value = 0; 
           
           oscillator.connect(gainNode);
           gainNode.connect(ctx.destination);

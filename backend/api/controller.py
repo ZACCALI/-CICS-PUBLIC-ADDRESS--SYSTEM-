@@ -441,6 +441,9 @@ class PAController:
 
         if task.priority == Priority.EMERGENCY:
             self.emergency_mode = True
+            # Play Siren on Pi
+            audio_service.play_siren(zones=['All Zones'])
+            
             # NOTIFICATION: Emergency Started
             notification_service.create(
                 "Emergency Activated",
