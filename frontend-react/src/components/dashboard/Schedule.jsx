@@ -6,7 +6,7 @@ import Modal from '../common/Modal';
 import api from '../../api/axios';
 
 const Schedule = () => {
-  const { schedules, addSchedule, updateSchedule, deleteSchedule, logActivity } = useApp();
+  const { schedules, addSchedule, updateSchedule, deleteSchedule, logActivity, emergencyActive } = useApp();
   const { currentUser, getAllUsers } = useAuth();
   const [activeTab, setActiveTab] = useState('pending');
   
