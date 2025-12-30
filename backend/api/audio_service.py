@@ -12,6 +12,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class AudioService:
+    def __init__(self):
         self.current_process = None
         self.stream_process = None
         self._lock = threading.Lock()
