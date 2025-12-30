@@ -469,9 +469,9 @@ class PAController:
         
         # --- AUDIO OUTPUT START ---
         if task.type == TaskType.VOICE:
-             # 1. Play Intro Chime Synchronously
+             # 1. Play Intro Chime Synchronously (Non-blocking threads)
              zones = task.data.get('zones', [])
-             print(f"[Controller] Playing Intro Chime for Voice...")
+             print(f"[Controller] Playing Intro Chime for Voice Broadcast...")
              audio_service.play_chime_sync(zones)
              
              # 2. Start the Streaming Pipe
@@ -536,12 +536,6 @@ class PAController:
                 target_role="admin"
              )
 
-        elif task.type == TaskType.VOICE:
-            # Voice is Realtime (Microphone). 
-            # UPDATED: Use Async Intro so we don't block Start Command
-            intro_path = os.path.join("system_sounds", "intro.mp3")
-            abs_intro = os.path.abspath(intro_path)
-            audio_service.play_intro_async(abs_intro)
             
         elif task.type == TaskType.TEXT:
             # FIX: Route sends 'content', not 'message'

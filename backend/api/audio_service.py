@@ -12,14 +12,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class AudioService:
-    def __init__(self):
         self.current_process = None
         self.stream_process = None
         self._lock = threading.Lock()
         self.stream_lock = threading.Lock()
         
+        # Paths
+        self.root_dir = Path(__file__).resolve().parent.parent
+        self.base_dir = self.root_dir / "piper_tts"
+        self.system_sounds_dir = self.root_dir / "system_sounds"
+        
         # Piper Setup
-        self.base_dir = Path(__file__).resolve().parent.parent / "piper_tts"
         self.os_type = platform.system()
         self.piper_exe = self._find_piper_executable()
         self.voices = self._scan_voices()
@@ -309,13 +312,15 @@ class AudioService:
                 self.stream_process = None
 
     def play_chime_sync(self, zones):
-        """Plays the intro chime synchronously on specified zones"""
+        """Plays the intro chime on specified zones. Returns immediately."""
         target_cards = self._get_target_cards(zones)
-        intro_path = os.path.abspath(os.path.join("system_sounds", "intro.mp3"))
+        intro_path = self.system_sounds_dir / "intro.mp3"
         
-        if not os.path.exists(intro_path):
+        if not intro_path.exists():
             print(f"[AudioService] Chime skipped: {intro_path} not found")
             return
+
+        abs_intro = str(intro_path.absolute())
 
         threads = []
         for card_id in target_cards:
