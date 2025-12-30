@@ -10,8 +10,9 @@
 - [x] Stabilize pause/play logic (Strict persistence) <!-- id: 8 -->
 - [x] Remove redundant /start calls in frontend <!-- id: 11 -->
 - [x] Implement backend idempotency for playback requests <!-- id: 12 -->
-- [x] Verify fixes on Raspberry Pi setup <!-- id: 4 -->
-- [x] Push changes to GitHub <!-- id: 5 -->
+- [/] Fix real-time broadcast distortion (16kHz + 16k buffer) <!-- id: 13 -->
+- [ ] Verify fixes on Raspberry Pi setup <!-- id: 4 -->
+- [/] Push changes to GitHub <!-- id: 5 -->
 - [ ] **Verification**
     - [ ] Verify "Clear All" persists (already implemented `cleared_by`, check logic).
     - [ ] Verify Red Dot appears for new items and disappears on open.

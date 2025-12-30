@@ -359,7 +359,7 @@ class PAController:
              with wave.open(abs_chunk, "wb") as wav_file:
                  wav_file.setnchannels(1)        # Mono
                  wav_file.setsampwidth(2)        # 2 bytes (16-bit)
-                 wav_file.setframerate(44100)    # 44.1kHz
+                 wav_file.setframerate(16000)    # 16kHz for Voice Stability
                  wav_file.writeframes(decoded_pcm)
              
              # Direct Play on Active Zones

@@ -257,7 +257,7 @@ const RealTime = () => {
             mediaStreamRef.current = stream;
 
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: 44100, // Force 44.1kHz
+                sampleRate: 16000, // Optimized for Pi (16kHz Voice)
             });
             audioContextRef.current = audioCtx;
             
@@ -270,8 +270,8 @@ const RealTime = () => {
             sourceRef.current = source;
             
             // ScriptProcessor (bufferSize, inputChannels, outputChannels)
-            // 4096 samples @ 44.1kHz ~= 92ms latency
-            const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+            // 16384 samples @ 16kHz ~= 1s latency (Stable for Pi)
+            const processor = audioCtx.createScriptProcessor(16384, 1, 1);
             processorRef.current = processor;
 
             processor.onaudioprocess = async (e) => {
