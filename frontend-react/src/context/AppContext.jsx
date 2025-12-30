@@ -374,6 +374,8 @@ export const AppProvider = ({ children }) => {
               if (data.mode === 'EMERGENCY') {
                   // Strictly stop all local activity (Mic, Music, System)
                   stopAllAudio();
+                  setBroadcastActive(false);
+                  setBroadcastPreparing(false);
                   return; 
               }
 

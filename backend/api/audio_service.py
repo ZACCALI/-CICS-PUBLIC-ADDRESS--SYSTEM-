@@ -360,11 +360,8 @@ class AudioService:
                         device = f"plughw:{cid},0"
                         env = os.environ.copy()
                         env["AUDIODEV"] = device
-                        # SoX Synth: 2 second sweep from 600Hz to 1200Hz
-                        try:
-                            # Use Popen so we can track and kill if needed, 
-                            # but run.wait() is easier in this thread loop.
-                            subprocess.run(['play', '-q', '-n', 'synth', '2', 'sine', '600:1200'], 
+                            # SoX Synth: 5 second sweep from 600Hz to 1200Hz
+                            subprocess.run(['play', '-q', '-n', 'synth', '5', 'sine', '600:1200'], 
                                            env=env, stderr=subprocess.DEVNULL)
                         except: pass
 

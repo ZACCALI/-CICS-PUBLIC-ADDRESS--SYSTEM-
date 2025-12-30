@@ -389,22 +389,21 @@ const RealTime = () => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800 flex items-center mb-6">
-        <i className="material-icons mr-3 text-primary">campaign</i> Real-Time Announcement
-      </h2>
-
-      {emergencyActive && (
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm flex items-center animate-pulse mb-6">
-              <i className="material-icons text-2xl mr-3">warning</i>
-              <div>
-                  <p className="font-bold">Emergency Alert Active</p>
-                  <p className="text-sm">Broadcast features are temporarily disabled.</p>
+      {/* Header with Emergency Status */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+            <i className="material-icons mr-3 text-primary">campaign</i> Real-Time Announcement
+          </h2>
+          
+          {emergencyActive && (
+              <div className="flex items-center px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold animate-pulse border border-red-200">
+                  <i className="material-icons text-sm mr-1">warning</i> SUSPENDED FOR EMERGENCY
               </div>
-          </div>
-      )}
+          )}
+      </div>
 
       {isLockedByOther && !emergencyActive && (
-          <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-800 p-4 rounded shadow-sm flex items-center mb-6 animate-fade-in">
+          <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-800 p-4 rounded shadow-sm flex items-center animate-fade-in">
               <i className="material-icons text-2xl mr-3">lock</i>
               <div>
                   <p className="font-bold">System Busy</p>
@@ -421,33 +420,48 @@ const RealTime = () => {
           <i className="material-icons mr-2 text-green-600">mic</i> Live Broadcast (Microphone)
         </h3>
         
-        <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-200 relative overflow-hidden">
+        <div className="flex flex-col items-center justify-center p-6 md:p-12 bg-gray-50 rounded-lg border border-dashed border-gray-200 relative overflow-hidden min-h-[300px]">
            
            {/* Visualizer Canvas overlay */}
            {broadcastActive && (
-               <canvas ref={canvasRef} width="600" height="200" className="absolute inset-x-0 bottom-0 w-full h-[150px] opacity-50 pointer-events-none" />
+               <canvas ref={canvasRef} width="600" height="200" className="absolute inset-x-0 bottom-0 w-full h-[150px] opacity-30 pointer-events-none" />
            )}
 
-           <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 transition-all duration-300 relative z-10 ${broadcastActive ? 'bg-red-100 animate-pulse' : 'bg-gray-200'}`}>
-             <i className={`material-icons text-4xl ${broadcastActive ? 'text-red-500' : 'text-gray-400'}`}>mic</i>
+           <div className={`w-28 h-28 md:w-32 md:h-32 rounded-full flex items-center justify-center mb-6 transition-all duration-500 relative z-10 ${
+               emergencyActive ? 'bg-gray-100' :
+               broadcastActive ? 'bg-red-100 animate-pulse scale-110 shadow-lg' : 'bg-white shadow-sm'
+           }`}>
+             <i className={`material-icons text-5xl ${emergencyActive ? 'text-gray-300' : (broadcastActive ? 'text-red-500' : 'text-gray-400')}`}>
+                 {emergencyActive ? 'block' : (broadcastActive ? 'sensors' : 'mic')}
+             </i>
            </div>
            
            <button 
              onClick={toggleBroadcast}
              disabled={isLockedByOther || emergencyActive || isSubmitting || broadcastPreparing}
-             className={`px-8 py-3 rounded-full font-bold shadow-lg transition-all transform hover:scale-105 relative z-10 ${broadcastActive ? 'bg-red-500 hover:bg-red-600 text-white' : ((isLockedByOther || emergencyActive || isSubmitting || broadcastPreparing) ? 'bg-gray-300 text-gray-500 cursor-not-allowed transform-none hover:scale-100 shadow-none' : 'bg-primary hover:bg-primary-dark text-white')}`}
+             className={`px-10 py-4 rounded-full font-bold shadow-xl transition-all transform active:scale-95 relative z-10 w-full max-w-[280px] ${
+                 broadcastActive ? 'bg-red-600 hover:bg-red-700 text-white' : 
+                 ((isLockedByOther || emergencyActive || isSubmitting || broadcastPreparing) ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' : 'bg-primary hover:bg-primary-dark hover:scale-105 text-white')
+             }`}
            >
-             {isSystemLoading || isSubmitting || broadcastPreparing ? (broadcastPreparing ? 'PLAYING CHIME...' : (isSubmitting ? 'PROCESSING...' : 'CONNECTING...')) : (emergencyActive ? 'EMERGENCY ACTIVE' : (isLockedByOther ? 'SYSTEM BUSY' : (broadcastActive ? 'STOP BROADCAST' : 'START BROADCAST')))}
+             {isSystemLoading || isSubmitting || broadcastPreparing ? (broadcastPreparing ? 'PLAYING CHIME...' : 'PROCESSING...') : 
+              (emergencyActive ? 'EMERGENCY ACTIVE' : (isLockedByOther ? 'SYSTEM BUSY' : (broadcastActive ? 'STOP BROADCAST' : 'START BROADCAST')))}
            </button>
            
-           <p className="mt-4 text-sm text-gray-500 relative z-10">
-             {broadcastActive ? 'Broadcasting live...' : 'Ready to broadcast'}
-           </p>
-           
-             <div className="mt-2 flex items-center text-xs text-gray-500 bg-white px-3 py-1 rounded-full border border-gray-100 relative z-10">
-               <i className="material-icons text-sm mr-1">volume_off</i>
-               Local monitoring muted (Audio plays on PA System)
-             </div>
+           <div className="mt-6 text-center relative z-10">
+                <p className={`text-sm font-bold tracking-tight transition-all duration-300 ${
+                    emergencyActive ? 'text-red-600' :
+                    broadcastActive ? 'text-red-700' : 'text-gray-400'
+                }`}>
+                    {emergencyActive ? "SYSTEM ACCESSED SUSPENDED" :
+                     broadcastPreparing ? "Chime Playing..." :
+                     broadcastActive ? "LIVE BROADCASTING..." : "Ready to Broadcast"}
+                </p>
+                <div className="mt-2 flex items-center justify-center text-[10px] text-gray-400 bg-white px-3 py-1 rounded-full border border-gray-100">
+                    <i className="material-icons text-xs mr-1">volume_off</i>
+                    LOCAL MONITORING MUTED
+                </div>
+           </div>
         </div>
       </div>
 

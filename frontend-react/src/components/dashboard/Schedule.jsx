@@ -449,13 +449,21 @@ const Schedule = () => {
             <i className="material-icons mr-3 text-primary">schedule</i> Scheduled Announcements
           </h2>
           
+          {/* Emergency Alert Badge */}
+          {emergencyActive && (
+              <div className="flex items-center px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold animate-pulse border border-red-200">
+                  <i className="material-icons text-sm mr-1">warning</i> SUSPENDED FOR EMERGENCY
+              </div>
+          )}
+          
           {/* Admin: Button in Header */}
           {currentUser?.role === 'admin' && (
               <button 
                     onClick={() => setShowModal(true)}
-                    className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow font-medium text-sm transition-all w-full sm:w-auto justify-center"
+                    disabled={emergencyActive}
+                    className={`flex items-center px-4 py-2 text-white rounded-lg shadow font-medium text-sm transition-all w-full sm:w-auto justify-center ${emergencyActive ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
                  >
-                   <i className="material-icons text-sm mr-2">add</i> Add Schedule
+                   <i className="material-icons text-sm mr-2">{emergencyActive ? 'lock' : 'add'}</i> Add Schedule
               </button>
           )}
       </div>
@@ -522,9 +530,10 @@ const Schedule = () => {
              {currentUser?.role !== 'admin' && (
                   <button 
                         onClick={() => setShowModal(true)}
-                        className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow font-medium text-sm transition-all w-full md:w-auto justify-center md:ml-auto"
+                        disabled={emergencyActive}
+                        className={`flex items-center px-4 py-2 text-white rounded-lg shadow font-medium text-sm transition-all w-full md:w-auto justify-center md:ml-auto ${emergencyActive ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
                      >
-                       <i className="material-icons text-sm mr-2">add</i> Add Schedule
+                       <i className="material-icons text-sm mr-2">{emergencyActive ? 'lock' : 'add'}</i> Add Schedule
                   </button>
              )}
          </div>
