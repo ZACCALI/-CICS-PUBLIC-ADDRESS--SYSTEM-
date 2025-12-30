@@ -469,8 +469,12 @@ class PAController:
         
         # --- AUDIO OUTPUT START ---
         if task.type == TaskType.VOICE:
-             # Start the Streaming Pipe
+             # 1. Play Intro Chime Synchronously
              zones = task.data.get('zones', [])
+             print(f"[Controller] Playing Intro Chime for Voice...")
+             audio_service.play_chime_sync(zones)
+             
+             # 2. Start the Streaming Pipe
              audio_service.start_streaming(zones)
 
         elif task.type == TaskType.SCHEDULE:

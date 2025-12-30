@@ -275,11 +275,11 @@ class AudioService:
                 # -b 16: 16-bit
                 # -c 1: Mono
                 # -: read from stdin
-                print(f"[AudioService] Starting Stream Pipe on {device} (Vol: 0.7, 16kHz)")
+                print(f"[AudioService] Starting Stream Pipe on {device} (Vol: 0.95, 16kHz)")
                 env = os.environ.copy()
                 env["AUDIODEV"] = device
                 self.stream_process = subprocess.Popen(
-                    ['play', '-q', '-v', '0.7', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-'],
+                    ['play', '-q', '-v', '0.95', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-'],
                     stdin=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
                     env=env
@@ -307,6 +307,35 @@ class AudioService:
                     self.stream_process.terminate()
                 except: pass
                 self.stream_process = None
+
+    def play_chime_sync(self, zones):
+        """Plays the intro chime synchronously on specified zones"""
+        target_cards = self._get_target_cards(zones)
+        intro_path = os.path.abspath(os.path.join("media", "intro.mp3"))
+        
+        if not os.path.exists(intro_path):
+            print(f"[AudioService] Chime skipped: {intro_path} not found")
+            return
+
+        threads = []
+        for card_id in target_cards:
+            def play_on_card(cid):
+                device = f"plughw:{cid},0"
+                try:
+                    env = os.environ.copy()
+                    env["AUDIODEV"] = device
+                    # Play chime at slightly higher volume for attention
+                    subprocess.run(['play', '-q', '-v', '1.0', intro_path], env=env, stderr=subprocess.DEVNULL)
+                except:
+                    # Fallback
+                    subprocess.run(['aplay', '-D', device, intro_path], stderr=subprocess.DEVNULL)
+
+            t = threading.Thread(target=play_on_card, args=(card_id,))
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
 
     def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""
