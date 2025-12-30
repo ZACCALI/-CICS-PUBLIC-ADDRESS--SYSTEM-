@@ -299,17 +299,42 @@ class PAController:
              decoded = base64.b64decode(audio_base64)
              
              # Save temp chunk
-             chunk_filename = f"chunk_{uuid.uuid4().hex}.wav"
-             chunk_path = os.path.join("system_sounds", chunk_filename)
-             abs_chunk = os.path.abspath(chunk_path)
+             # Save temp chunk as WebM (Browser Default)
+             chunk_base = f"chunk_{uuid.uuid4().hex}"
+             webm_path = os.path.join("system_sounds", f"{chunk_base}.webm")
+             wav_path = os.path.join("system_sounds", f"{chunk_base}.wav")
              
-             with open(abs_chunk, "wb") as f:
+             abs_webm = os.path.abspath(webm_path)
+             abs_wav = os.path.abspath(wav_path)
+             
+             with open(abs_webm, "wb") as f:
                  f.write(decoded)
              
-             # Direct Play (Fire and Forget to avoid blocking stream)
-             # No Intro needed for chunks
-             # Using 'play_file' from audio_service which is generic
-             audio_service.play_file(abs_chunk)
+             # Convert WebM to WAV using FFMPEG (Fixes "TV Static" issue of playing raw WebM)
+             # ffmpeg -i input.webm -ac 1 -ar 44100 -f wav output.wav
+             import subprocess
+             try:
+                 subprocess.run([
+                     'ffmpeg', '-y', 
+                     '-i', abs_webm, 
+                     '-ac', '1', # Mono
+                     '-ar', '44100', # Standard Rate
+                     '-f', 'wav', 
+                     abs_wav
+                 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                 
+                 # Play the converted WAV
+                 audio_service.play_file(abs_wav)
+                 
+                 # Clean up (Optional, OS handles temp usually but good practice)
+                 # threading.Thread(target=lambda: (time.sleep(10), os.remove(abs_webm), os.remove(abs_wav))).start()
+                 
+             except FileNotFoundError:
+                 print("[Controller] Error: FFMPEG not installed. Cannot convert WebM to WAV.")
+                 # Fallback: Try playing WebM directly if 'play' supports it (often doesn't, hence static)
+                 # audio_service.play_file(abs_webm) 
+             except Exception as rx:
+                  print(f"[Controller] Conversion/Playback Error: {rx}")
              
         except Exception as e:
             print(f"[Controller] Chunk Error: {e}")
