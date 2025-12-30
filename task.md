@@ -7,12 +7,11 @@
     - [ ] Update `AppContext.jsx`- [x] Investigate audio playback logic in both frontend and backend <!-- id: 0 -->
 - [x] Improve audio sound clarity (Aggressive 0.85 Vol) <!-- id: 6 -->
 - [x] Fix music restarting on new click <!-- id: 7 -->
-- [x] Stabilize pause/play logic (Strict persistence) <!-- id: 8 -->
-- [x] Remove redundant /start calls in frontend <!-- id: 11 -->
-- [x] Implement backend idempotency for playback requests <!-- id: 12 -->
-- [/] Fix real-time broadcast distortion (16kHz + 16k buffer) <!-- id: 13 -->
-- [ ] Verify fixes on Raspberry Pi setup <!-- id: 4 -->
-- [/] Push changes to GitHub <!-- id: 5 -->
+- [x] Fix real-time broadcast distortion (initial attempt) <!-- id: 13 -->
+- [x] Implement persistent streaming pipe in AudioService <!-- id: 14 -->
+- [x] Fix mediaStreamRef error in RealTime.jsx <!-- id: 15 -->
+- [x] Verify fixes on Raspberry Pi setup <!-- id: 4 -->
+- [x] Push changes to GitHub <!-- id: 5 -->
 - [ ] **Verification**
     - [ ] Verify "Clear All" persists (already implemented `cleared_by`, check logic).
     - [ ] Verify Red Dot appears for new items and disappears on open.

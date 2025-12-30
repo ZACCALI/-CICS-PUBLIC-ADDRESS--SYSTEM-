@@ -32,6 +32,7 @@ const RealTime = () => {
   const [textMessage, setTextMessage] = useState('');
   const [voices, setVoices] = useState([]);
   const [selectedVoice, setSelectedVoice] = useState('');
+  const mediaStreamRef = useRef(null);
   
   const [showModal, setShowModal] = useState(false);
   const [modalMessage, setModalMessage] = useState('');

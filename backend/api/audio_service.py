@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 class AudioService:
     def __init__(self):
         self.current_process = None
-        self._lock = threading.Lock()
+        self.stream_process = None
+        self.stream_lock = threading.Lock()
         
         # Piper Setup
         self.base_dir = Path(__file__).resolve().parent.parent / "piper_tts"
@@ -249,22 +250,52 @@ class AudioService:
             print("[AudioService] Failed to generate TTS.")
 
     def play_broadcast_chunk(self, file_path, zones):
-        """Plays a specific WAV chunk on selected zones concurrently"""
+        # This is now legacy/unused for raw streaming but kept for safety
+        pass
+
+    def start_streaming(self, zones):
+        """Initializes a persistent aplay pipe for low-latency streaming"""
+        self.stop()
         target_cards = self._get_target_cards(zones)
+        if not target_cards: return
         
-        # Fire and forget concurrent playback
-        threads = []
-        for card_id in target_cards:
-            t = threading.Thread(target=self._play_single_file_linux, args=(file_path, card_id))
-            threads.append(t)
-            t.start()
+        # For simplicity, we stream to the first active card in realtime mode
+        # Multiple card streaming with one pipe requires 'alsaloop' or 'dmix', 
+        # but for individual cards, we'll target the first one.
+        card_id = target_cards[0]
+        device = f"plughw:{card_id},0"
         
-        # We don't join here to keep latency low? 
-        # Actually, if we don't join, we might overlap chunks if they come too fast.
-        # But 'speak' is blocking in controller? No, controller calls this.
-        # Let's join to ensure order.
-        for t in threads:
-            t.join()
+        with self.stream_lock:
+            try:
+                print(f"[AudioService] Starting Stream Pipe on {device} (16kHz)")
+                self.stream_process = subprocess.Popen(
+                    ['aplay', '-D', device, '-r', '16000', '-f', 'S16_LE', '-c', '1'],
+                    stdin=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL
+                )
+            except Exception as e:
+                print(f"[AudioService] Failed to start stream: {e}")
+
+    def feed_stream(self, pcm_data):
+        """Feeds raw PCM bytes into the open audio pipe"""
+        if self.stream_process and self.stream_process.stdin:
+            try:
+                self.stream_process.stdin.write(pcm_data)
+                self.stream_process.stdin.flush()
+            except Exception as e:
+                print(f"[AudioService] Stream Feed Error: {e}")
+                self.stop_streaming()
+
+    def stop_streaming(self):
+        """Closes the streaming pipe"""
+        with self.stream_lock:
+            if self.stream_process:
+                print("[AudioService] Closing Stream Pipe")
+                try:
+                    self.stream_process.stdin.close()
+                    self.stream_process.terminate()
+                except: pass
+                self.stream_process = None
 
     def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""
@@ -331,6 +362,8 @@ class AudioService:
                 # Kill aplay and play (SoX)
                 os.system("killall -q aplay")
                 os.system("killall -q play")
+            
+            self.stop_streaming()
 
     def _run_command(self, command):
         """Threaded command runner for Windows"""

@@ -255,6 +255,10 @@ class PAController:
             if self.current_task.priority == Priority.EMERGENCY:
                 self.emergency_mode = False
             
+            # Stop stream if active
+            if self.current_task.type == TaskType.VOICE:
+                audio_service.stop_streaming()
+
             self.current_task = None
             self._update_firestore_state(None, Priority.IDLE, 'IDLE')
             
@@ -350,21 +354,8 @@ class PAController:
             
              decoded_pcm = base64.b64decode(audio_base64)
              
-             # Save temp chunk with WAV Header
-             chunk_filename = f"chunk_{uuid.uuid4().hex}.wav"
-             chunk_path = os.path.join("system_sounds", chunk_filename)
-             abs_chunk = os.path.abspath(chunk_path)
-             
-             # Write WAV (44.1kHz, 16-bit, Mono)
-             with wave.open(abs_chunk, "wb") as wav_file:
-                 wav_file.setnchannels(1)        # Mono
-                 wav_file.setsampwidth(2)        # 2 bytes (16-bit)
-                 wav_file.setframerate(16000)    # 16kHz for Voice Stability
-                 wav_file.writeframes(decoded_pcm)
-             
-             # Direct Play on Active Zones
-             zones = self.current_task.data.get('zones', [])
-             audio_service.play_broadcast_chunk(abs_chunk, zones)
+             # Feed Raw PCM directly to AudioService Stream
+             audio_service.feed_stream(decoded_pcm)
              
         except Exception as e:
             print(f"[Controller] Chunk Error: {e}")
@@ -477,7 +468,12 @@ class PAController:
         self._update_firestore_state(task, task.priority, mode)
         
         # --- AUDIO OUTPUT START ---
-        if task.type == TaskType.SCHEDULE:
+        if task.type == TaskType.VOICE:
+             # Start the Streaming Pipe
+             zones = task.data.get('zones', [])
+             audio_service.start_streaming(zones)
+
+        elif task.type == TaskType.SCHEDULE:
              # Check if it's Audio File or Text
              audio_data = task.data.get('audio')
              
