@@ -160,40 +160,51 @@ class AudioService:
         self._play_multizone(intro_path, wav_path, target_cards)
 
     def _get_target_cards(self, zones):
-        """Maps logical zones (names) to ALSA card IDs"""
-        cards = set()
+        """Maps logical zones (names) to targets [{'card': int, 'channel': str/None}]"""
+        targets = []
+        seen = set()
+
+        print(f"[AudioService] Mapping Zones: {zones}")
         
-        print(f"[AudioService] Mapping Zones to Cards: {zones}")
-        
-        # If 'All Zones' or empty, play on all relevant cards
+        # Helper to add unique targets
+        def add_target(val):
+            card = val
+            channel = None
+            if isinstance(val, dict):
+                card = val.get('card', 2)
+                channel = val.get('channel')
+            
+            key = (card, channel)
+            if key not in seen:
+                seen.add(key)
+                targets.append({'card': card, 'channel': channel})
+
+        # Logic
         if not zones or "All Zones" in zones:
             for v in self.zones_config.values():
-                if isinstance(v, list): cards.update(v)
-                else: cards.add(v)
-            if not cards: 
-                print("[AudioService] No zones found in config, defaulting to Card 2 (Pi Speakers)")
-                cards.add(2) # Force Pi Speakers instead of HDMI (0)
-            print(f"[AudioService] Targeted All Cards: {list(cards)}")
-            return list(cards)
+                if isinstance(v, list):
+                    for item in v: add_target(item)
+                else: 
+                    add_target(v)
+        else:
+            for z in zones:
+                found = False
+                for config_name, val in self.zones_config.items():
+                    if z.lower() in config_name.lower():
+                        if isinstance(val, list):
+                            for item in val: add_target(item)
+                        else:
+                            add_target(val)
+                        found = True
+                if not found:
+                     print(f"[AudioService] Warning: Zone '{z}' not found")
 
-        # Specific Zones
-        for z in zones:
-            # Fuzzy match or exact match from config
-            found = False
-            for config_name, card_id in self.zones_config.items():
-                if z.lower() in config_name.lower():
-                    if isinstance(card_id, list): cards.update(card_id)
-                    else: cards.add(card_id)
-                    found = True
-            if not found:
-                print(f"[AudioService] Warning: Zone '{z}' not found in zones_config.json")
-        
-        if not cards: 
-            print("[AudioService] Warning: No valid cards found for zones, defaulting to Card 2")
-            cards.add(2) 
+        if not targets:
+            print("[AudioService] Defaulting to Card 2 (Stereo)")
+            add_target(2)
             
-        print(f"[AudioService] Final Card Selection: {list(cards)}")
-        return list(cards)
+        print(f"[AudioService] Final Targets: {targets}")
+        return targets
 
     def _ensure_device_active(self, card_id):
         """Forces the card to be unmuted and at 100% volume."""
@@ -205,31 +216,39 @@ class AudioService:
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except: pass
 
-    def _play_multizone(self, intro, body, card_ids, start_time=0):
-        """Plays audio sequence on list of cards (Linux) or default (Windows)"""
+    def _play_multizone(self, intro, body, targets, start_time=0):
+        """Plays audio sequence on list of targets (Linux) or default (Windows)"""
         
         if self.os_type == "Windows":
-            # Windows: Just play on default (Development Mode)
             print("[AudioService] Windows Mode: Playing on Default Device")
             self._play_sequence_windows(intro, body)
             return
 
-        # Linux / Raspberry Pi: Correct Multizone Logic
+        # Linux / Raspberry Pi
         threads = []
-        for card_id in card_ids:
-            # AUTO-FIX: Ensure volume is up before playing
+        # Support legacy list of ints just in case
+        clean_targets = []
+        for t in targets:
+            if isinstance(t, int): clean_targets.append({'card': t, 'channel': None})
+            else: clean_targets.append(t)
+
+        for target in clean_targets:
+            card_id = target['card']
+            channel = target.get('channel')
+
+            # AUTO-FIX
             self._ensure_device_active(card_id)
             
-            t = threading.Thread(target=self._play_sequence_linux, args=(intro, body, card_id, start_time))
+            t = threading.Thread(target=self._play_sequence_linux, args=(intro, body, card_id, channel, start_time))
             threads.append(t)
             t.start()
-            time.sleep(0.05) # PREVENT RACE: Minimal stagger (50ms) to avoid echo but ease power
+            time.sleep(0.05) 
         
         for t in threads:
             t.join()
 
-    def _play_sequence_linux(self, intro, body, card_id, start_time=0):
-        """Plays Intro (Optional) -> Body on specific ALSA card using SoX (Preferred) or Aplay"""
+    def _play_sequence_linux(self, intro, body, card_id, channel=None, start_time=0):
+        """Plays Intro (Optional) -> Body on specific ALSA card + Channel remix"""
         
         # Check for SoX
         has_sox = False
@@ -242,14 +261,24 @@ class AudioService:
         
         try:
             if has_sox:
-                # SoX Volume (0.9 = 90%)
                 env = os.environ.copy()
                 env["AUDIODEV"] = device
-                print(f"[AudioService] Playing via SoX (Vol: 0.9, Seek: {start_time}s) on {device}")
                 
-                # 1. Intro (Optional)
+                # Channel REMIX logic
+                # remix 1 0 = Left Only (Channel 1)
+                # remix 0 1 = Right Only (Channel 2)
+                # remix 1 1 = Mono to Both
+                # Default (No flag) = Stereo
+                remix_flags = []
+                if channel == "left": remix_flags = ['remix', '1', '0']
+                elif channel == "right": remix_flags = ['remix', '0', '1']
+
+                print(f"[AudioService] SoX Play {device} (Ch: {channel or 'Stereo'})")
+                
+                # 1. Intro
                 if intro:
-                    p = subprocess.Popen(['play', '-v', '0.9', intro], env=env)
+                    cmd = ['play', '-v', '0.9', intro] + remix_flags
+                    p = subprocess.Popen(cmd, env=env)
                     self._track_process(p)
                     p.wait()
                     self._untrack_process(p)
@@ -257,22 +286,21 @@ class AudioService:
                 # 2. Body
                 if body:
                     cmd = ['play', '-v', '0.9', body]
-                    if start_time > 0:
-                        cmd.extend(['trim', str(start_time)])
+                    if start_time > 0: cmd.extend(['trim', str(start_time)])
+                    cmd = cmd + remix_flags
+                    
                     p = subprocess.Popen(cmd, env=env)
                     self._track_process(p)
                     p.wait()
                     self._untrack_process(p)
             else:
-                # Fallback to Aplay (Does not support precise trim easily)
-                print(f"[AudioService] Playing via Aplay on {device}")
-                if intro:
-                    subprocess.run(['aplay', '-D', device, intro], check=True)
-                if body:
-                    subprocess.run(['aplay', '-D', device, body], check=True)
-                
+                # Fallback Aplay (No Remix support)
+                print(f"[AudioService] Aplay Fallback (No Channel Split) on {device}")
+                if intro: subprocess.run(['aplay', '-D', device, intro], check=True)
+                if body: subprocess.run(['aplay', '-D', device, body], check=True)
+            
         except Exception as e:
-            print(f"[AudioService] Linux Playback Error on Card {card_id}: {e}")
+            print(f"[AudioService] Playback Error {card_id}: {e}")
 
     def _play_sequence_windows(self, intro, body):
         """Windows Powershell sequence"""
@@ -315,25 +343,42 @@ class AudioService:
     def start_streaming(self, zones):
         """Initializes persistent play pipes for low-latency streaming on ALL target zones"""
         self.stop_streaming() # Stop existing
-        target_cards = self._get_target_cards(zones)
-        if not target_cards: return
+        targets = self._get_target_cards(zones)
+        if not targets: return
         
-        print(f"[AudioService] Starting Stream Pipes on cards: {target_cards}")
+        print(f"[AudioService] Starting Stream Pipes on: {targets}")
         
         with self.stream_lock:
             self.stream_processes = []
             
-            for card_id in target_cards:
-                 self._ensure_device_active(card_id) # AUTO-FIX: Unmute stream target
-                 time.sleep(0.05) # PREVENT POWER SPIKE: Minimal Stagger
+            clean_targets = []
+            for t in targets:
+                if isinstance(t, int): clean_targets.append({'card': t, 'channel': None})
+                else: clean_targets.append(t)
+
+            for target in clean_targets:
+                 card_id = target['card']
+                 channel = target.get('channel')
+
+                 self._ensure_device_active(card_id) 
+                 time.sleep(0.05) 
                  device = f"plughw:{card_id},0"
+                 
+                 # Remix Logic for Stream
+                 remix_flags = []
+                 if channel == "left": remix_flags = ['remix', '1', '0']
+                 elif channel == "right": remix_flags = ['remix', '0', '1']
+
                  try:
-                    print(f"  -> Opening Pipe for {device}")
+                    print(f"  -> Opening Pipe for {device} (Ch: {channel})")
                     env = os.environ.copy()
                     env["AUDIODEV"] = device
-                    # Using SoX for consistent volume control
+                    
+                    cmd = ['play', '-q', '-v', '0.9', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-']
+                    cmd = cmd + remix_flags
+                    
                     proc = subprocess.Popen(
-                        ['play', '-q', '-v', '0.9', '-t', 'raw', '-r', '16000', '-e', 'signed-integer', '-b', '16', '-c', '1', '-'],
+                        cmd,
                         stdin=subprocess.PIPE,
                         stderr=subprocess.DEVNULL,
                         env=env
@@ -393,20 +438,34 @@ class AudioService:
 
         abs_intro = str(intro_path.absolute())
 
+    def play_chime_sync(self, zones):
+        """Plays the intro chime on specified zones. Blocks until finished."""
+        targets = self._get_target_cards(zones)
+        intro_path = self.system_sounds_dir / "intro.mp3"
+        
+        if not intro_path.exists(): return
+
         threads = []
-        for card_id in target_cards:
-            def play_on_card(cid):
+        for t_obj in targets:
+            card_id = t_obj['card'] if isinstance(t_obj, dict) else t_obj
+            channel = t_obj.get('channel') if isinstance(t_obj, dict) else None
+
+            def play_on_card(cid, ch):
                 device = f"plughw:{cid},0"
                 try:
                     env = os.environ.copy()
                     env["AUDIODEV"] = device
-                    # Play chime at safe volume for clarity
-                    subprocess.run(['play', '-q', '-v', '0.9', intro_path], env=env, stderr=subprocess.DEVNULL)
-                except:
-                    # Fallback
-                    subprocess.run(['aplay', '-D', device, intro_path], stderr=subprocess.DEVNULL)
+                    
+                    remix_flags = []
+                    if ch == "left": remix_flags = ['remix', '1', '0']
+                    elif ch == "right": remix_flags = ['remix', '0', '1']
 
-            t = threading.Thread(target=play_on_card, args=(card_id,))
+                    cmd = ['play', '-q', '-v', '0.9', str(intro_path)] + remix_flags
+                    subprocess.run(cmd, env=env, stderr=subprocess.DEVNULL)
+                except:
+                    pass
+
+            t = threading.Thread(target=play_on_card, args=(card_id, channel))
             threads.append(t)
             t.start()
 
@@ -422,30 +481,35 @@ class AudioService:
             self._siren_stop_event.clear()
             self._siren_volume = volume
         
-        target_cards = self._get_target_cards(zones)
-        print(f"[AudioService] Starting Emergency Siren on cards: {target_cards}")
+        targets = self._get_target_cards(zones)
+        print(f"[AudioService] Starting Emergency Siren on: {targets}")
         
         def run_siren():
             while not self._siren_stop_event.is_set():
                 threads = []
-                for card_id in target_cards:
-                    def play_on_card(cid):
+                for t_obj in targets:
+                    card_id = t_obj['card'] if isinstance(t_obj, dict) else t_obj
+                    channel = t_obj.get('channel') if isinstance(t_obj, dict) else None
+
+                    def play_on_card(cid, ch):
                         device = f"plughw:{cid},0"
                         env = os.environ.copy()
                         env["AUDIODEV"] = device
-                        # SoX Synth: 5 second sweep from 600Hz to 1200Hz
                         try:
-                            # Use variable volume
+                            remix_flags = []
+                            if ch == "left": remix_flags = ['remix', '1', '0']
+                            elif ch == "right": remix_flags = ['remix', '0', '1']
+
                             vol = self._siren_volume
-                            # Shorten burst to 1 second for faster volume response
-                            p = subprocess.Popen(['play', '-q', '-v', str(vol), '-n', 'synth', '1', 'sine', '600:1200'], 
-                                           env=env, stderr=subprocess.DEVNULL)
+                            cmd = ['play', '-q', '-v', str(vol), '-n', 'synth', '1', 'sine', '600:1200'] + remix_flags
+                            
+                            p = subprocess.Popen(cmd, env=env, stderr=subprocess.DEVNULL)
                             self._track_process(p)
                             p.wait()
                             self._untrack_process(p)
                         except: pass
 
-                    t = threading.Thread(target=play_on_card, args=(card_id,))
+                    t = threading.Thread(target=play_on_card, args=(card_id, channel))
                     threads.append(t)
                     t.start()
                 
@@ -481,11 +545,11 @@ class AudioService:
     def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""
         self.stop()
-        target_cards = self._get_target_cards(zones)
+        targets = self._get_target_cards(zones)
         
         # Run in a separate thread to avoid blocking the Controller
         def daemon_play():
-            self._play_multizone(None, file_path, target_cards, start_time=start_time)
+            self._play_multizone(None, file_path, targets, start_time=start_time)
             
         t = threading.Thread(target=daemon_play, daemon=True)
         t.start()

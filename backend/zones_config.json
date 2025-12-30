@@ -1,6 +1,6 @@
 {
-    "Library": 2,
-    "Main Hall": 2,
-    "Admin Office": 3,
-    "Classrooms": 3
+    "Library": {"card": 2, "channel": "left"},
+    "Main Hall": {"card": 2, "channel": "left"},
+    "Admin Office": {"card": 2, "channel": "right"},
+    "Classrooms": {"card": 2, "channel": "right"}
 }
