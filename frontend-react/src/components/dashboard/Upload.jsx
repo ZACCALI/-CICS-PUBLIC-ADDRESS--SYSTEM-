@@ -436,10 +436,11 @@ const Upload = () => {
         <h3 className="text-lg font-semibold text-gray-700 mb-4">Select Target Zones:</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {Object.keys(zones).map((label, idx) => (
-             <label key={idx} className="flex items-center space-x-3 p-3 border border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md">
+             <label key={idx} className={`flex items-center space-x-3 p-3 border border-gray-100 rounded-lg transition-all duration-200 shadow-sm ${playingId ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50 cursor-pointer active:scale-95 hover:shadow-md'}`}>
                <input 
                  type="checkbox" 
                  checked={zones[label]}
+                 disabled={!!playingId}
                  onChange={() => {
                     if (label === 'All Zones') {
                         const newValue = !zones['All Zones'];
