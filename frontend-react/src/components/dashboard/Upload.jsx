@@ -35,68 +35,7 @@ const Upload = () => {
 
   // ...
 
-  // Listeners
-  useEffect(() => {
-      const audio = audioRef.current;
-      audio.volume = 0; 
-      
-      const onPlay = () => setIsPaused(false);
-      const onPause = () => setIsPaused(true);
 
-      audio.addEventListener('timeupdate', handleTimeUpdate);
-      audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.addEventListener('ended', handleEnded);
-      audio.addEventListener('play', onPlay);
-      audio.addEventListener('pause', onPause);
-      
-      // ...
-
-      return () => {
-          audio.removeEventListener('timeupdate', handleTimeUpdate); // ...
-          audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-          audio.removeEventListener('ended', handleEnded);
-          audio.removeEventListener('play', onPlay);
-          audio.removeEventListener('pause', onPause);
-          // ...
-      };
-  }, [files, playingId]); 
-
-  // ...
-
-             <label key={idx} className={`flex items-center space-x-3 p-3 border border-gray-100 rounded-lg transition-all duration-200 shadow-sm ${playingId && !isPaused ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50 cursor-pointer active:scale-95 hover:shadow-md'}`}>
-               <input 
-                 type="checkbox" 
-                 checked={zones[label]}
-                 disabled={!!playingId && !isPaused}
-                 onChange={() => {
-  const [duration, setDuration] = useState(0);
-  
-  const audioRef = useRef(new Audio());
-  const startTimeRef = useRef(null);
-  const logIdRef = useRef(null);
-  const isManuallyPaused = useRef(false);
-  const seekTimeoutRef = useRef(null);
-  const isProcessing = useRef(false);
-
-  // Sync Log ID for callbacks
-  useEffect(() => { logIdRef.current = currentLogId; }, [currentLogId]);
-
-  // Format Helper
-  const formatTime = (time) => {
-    if (!time || isNaN(time)) return "0:00";
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
-  };
-
-  // Player Handlers
-  const handleTimeUpdate = () => {
-      setCurrentTime(audioRef.current.currentTime);
-  };
-
-  const handleLoadedMetadata = () => {
-      setDuration(audioRef.current.duration);
-  };
 
   const handleEnded = () => {
       // Auto-Next Logic
