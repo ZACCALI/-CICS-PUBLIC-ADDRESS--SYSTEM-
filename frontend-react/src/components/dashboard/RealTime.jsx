@@ -239,7 +239,7 @@ const RealTime = () => {
     
     // Safety Check for Microphone API (Requires HTTPS or Localhost)
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setModalMessage("Microphone access blocked. access via 'localhost' or HTTPS is required.");
+        setModalMessage("Microphone Blocked! Browser requires HTTPS.\n\nTo fix on Chrome:\n1. Go to: chrome://flags/#unsafely-treat-insecure-origin-as-secure\n2. Enable it.\n3. Add: http://" + window.location.host + "\n4. Relaunch Chrome.");
         setShowModal(true);
         return;
     }
