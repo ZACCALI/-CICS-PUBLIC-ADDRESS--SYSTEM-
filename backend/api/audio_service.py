@@ -234,24 +234,55 @@ class AudioService:
             return
 
         # Linux / Raspberry Pi
-        threads = []
-        # Support legacy list of ints just in case
+        
+        # 1. Cleaning Targets
         clean_targets = []
         for t in targets:
             if isinstance(t, int): clean_targets.append({'card': t, 'channel': None})
             else: clean_targets.append(t)
 
-        for target in clean_targets:
-            card_id = target['card']
-            channel = target.get('channel')
+        # 2. Group by Card ID (Optimization for Single-Card Sync)
+        # We merge 'left' and 'right' requests for the same card into a single 'stereo' request
+        grouped_targets = {}
+        for t in clean_targets:
+            card = t['card']
+            channel = t.get('channel')
+            
+            if card not in grouped_targets:
+                grouped_targets[card] = set()
+            
+            if channel: 
+                grouped_targets[card].add(channel)
+            else:
+                grouped_targets[card].add('stereo') # Explicit stereo/both
 
+        threads = []
+        
+        for card_id, channels in grouped_targets.items():
+            # Determine effective channel mode for this card process
+            # If 'stereo' is present, or BOTH 'left' and 'right' are present -> Play Stereo (No Remix or Standard Remix)
+            # If only 'left' -> Remix Left
+            # If only 'right' -> Remix Right
+            
+            mode = None
+            if 'stereo' in channels or ('left' in channels and 'right' in channels):
+                mode = None # Standard Stereo (or 'remix 1 2' implicit)
+            elif 'left' in channels:
+                mode = 'left'
+            elif 'right' in channels:
+                mode = 'right'
+            
             # AUTO-FIX
             self._ensure_device_active(card_id)
             
-            t = threading.Thread(target=self._play_sequence_linux, args=(intro, body, card_id, channel, start_time))
+            print(f"[AudioService] Launching Process for Card {card_id} Mode: {mode or 'Stereo (Merged)'}")
+            
+            t = threading.Thread(target=self._play_sequence_linux, args=(intro, body, card_id, mode, start_time))
             threads.append(t)
             t.start()
-            time.sleep(0.05) 
+            # Slight stagger only between DIFFERENT CARDS to prevent power spike
+            if len(grouped_targets) > 1:
+                time.sleep(0.05) 
         
         for t in threads:
             t.join()
