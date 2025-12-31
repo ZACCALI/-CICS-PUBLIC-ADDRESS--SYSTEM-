@@ -27,7 +27,7 @@ MANIFEST
 venv/
 env/
 ENV/
-.env
+
 
 # Firebase
 serviceAccountKey.json
