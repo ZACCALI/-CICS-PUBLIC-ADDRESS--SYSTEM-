@@ -139,6 +139,43 @@ const Upload = () => {
   }, [files, playingId]); 
 
   // RESUME LOGIC (Watch System State)
+  // SYNC STATE ON LOAD/REFRESH
+  useEffect(() => {
+      if (!systemState?.active_task) return;
+
+      const task = systemState.active_task;
+      // If we are fresh (no playingId) but system says Music is Playing
+      if (!playingId && task.type === 'BACKGROUND') {
+          console.log("[State Sync] Found active background task:", task);
+          
+          // 1. Find the file ID from the task data
+          // task.data.file might be the filename or full path. We need to match it to our 'files' list.
+          // The backend stores 'file': 'path/to/song.mp3'. Our 'files' list has 'id' (filename) and 'url'.
+          const filename = task.data?.file ? task.data.file.split(/[/\\]/).pop() : null;
+          
+          if (filename) {
+              const fileMatch = files.find(f => f.name === filename || f.id === filename);
+              if (fileMatch) {
+                  console.log("[State Sync] Restoring Player State for:", fileMatch.name);
+                  setPlayingId(fileMatch.id);
+                  setIsPlaying(true); 
+                  // Ideally we would sync currentTime too if backend provided it, but it doesn't yet.
+                  // For now, it will start from 0 visually, but backend is already playing.
+                  // Since audio.volume=0, it doesn't matter if we 'play' locally from 0.
+                  // BUT we want the valid seeking UI. 
+                  if (audioRef.current) {
+                      audioRef.current.src = fileMatch.url;
+                      // Don't call play() immediately to avoid double-audio glitches if using browser audio. 
+                      // But we ARE using browser audio (muted) for timing.
+                      // So we SHOULD play.
+                      audioRef.current.play().catch(e => console.error("Sync Play failed", e));
+                  }
+              }
+          }
+      }
+  }, [systemState, files]); // Run when systemState or file list loads
+
+  // EXISTING EFFECT (Modified to not conflict)
   useEffect(() => {
       if (!playingId || !audioRef.current) return;
 
