@@ -259,6 +259,19 @@ class PAController:
                 print(f"[Controller] Denied Stop: ID Mismatch ({task_id} vs {self.current_task.id})")
                 return
 
+            # NEW: If requesting to stop specific TYPE, check Type (unless ID provided)
+            # This prevents 'Stop Voice' (Refresh) from killing 'Background Music'
+            if task_type and self.current_task:
+                 if not task_id: # ID override always wins
+                     # Special Case: 'voice' stop should NOT kill 'background' or 'schedule'
+                     # 'any' stop (None) kills everything
+                     if self.current_task.type != task_type and task_type != 'any':
+                         # Allow mapped types if string differs, but here we use TaskType enum mostly.
+                         # Realtime router maps string to Enum. self.current_task.type is Enum.
+                         # We should compare Enums or accept string match.
+                         print(f"[Controller] Denied Stop: Type Mismatch (Requested {task_type} vs Active {self.current_task.type})")
+                         return
+
             # ADMIN OVERRIDE & ID PROTECTION
             if not task_id and self.current_task:
                  # Check if user is an Admin (allowing bypass of ID requirement)
