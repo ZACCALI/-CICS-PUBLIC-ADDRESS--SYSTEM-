@@ -9,8 +9,53 @@ from api.routes.emergency import emergency_route
 from api.routes.files import router as files_router
 from fastapi.staticfiles import StaticFiles
 import os
+import threading
+import time
+import logging
 
 from fastapi.responses import FileResponse
+from contextlib import asynccontextmanager
+from api.audio_service import audio_service
+
+logger = logging.getLogger("uvicorn")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting up Device Heartbeat...")
+    
+    stop_event = threading.Event()
+    
+    def heartbeat():
+        from api.firebaseConfig import db, firestore_server_timestamp
+        while not stop_event.is_set():
+            try:
+                # Update 'devices/pi-main' document
+                db.collection('devices').document('pi-main').set({
+                    'status': 'online',
+                    'last_heartbeat': firestore_server_timestamp(),
+                    'type': 'backend'
+                }, merge=True)
+                # Sleep 30s
+            except Exception as e:
+                print(f"[Heartbeat] Error: {e}")
+            
+            # Sleep in chunks to allow fast exit
+            for _ in range(30):
+                if stop_event.is_set(): break
+                time.sleep(1)
+
+    t = threading.Thread(target=heartbeat, daemon=True)
+    t.start()
+    
+    yield
+    # Shutdown
+    print("[LifeSpan] Shutting down services...")
+    stop_event.set()
+    try:
+        audio_service.stop()
+    except Exception as e:
+        print(f"[LifeSpan] Cleanup skipped or failed: {e}")
 
 app = FastAPI(lifespan=lifespan)
 
