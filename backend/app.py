@@ -72,7 +72,7 @@ app.include_router(real_time_announcements_router)
 app.include_router(scheduled_announcements_router)
 app.include_router(manage_account_router)
 app.include_router(emergency_route)
-app.include_router(files_router)
+app.include_router(files_router, prefix="/files")
 
 # Import and include the AI Router for Smart Scheduler
 from api.routes.ai import ai_router
