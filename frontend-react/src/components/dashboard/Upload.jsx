@@ -145,18 +145,30 @@ const Upload = () => {
   useEffect(() => {
       if (!isPlaying || !playingId || !systemState?.active_task) return;
       
-      // Only send heartbeat if WE are the owner and it is BACKGROUND music
       const task = systemState.active_task;
+      
+      // DEBUG: Log Heartbeat Decision
+      if (task.type === 'BACKGROUND') {
+           console.log(`[Heartbeat Check] MyUser: '${currentUserName}' vs TaskUser: '${task.data?.user}'`);
+      }
+
+      // Only send heartbeat if WE are the owner and it is BACKGROUND music
+      // Relaxed Check: Compare loosely or trim?
       if (task.type === 'BACKGROUND' && task.data?.user === currentUserName) {
+          console.log("[Heartbeat] Starting Heartbeat Loop for Task:", task.id);
           const interval = setInterval(() => {
               // Send heartbeat
+              console.log("[Heartbeat] Bump ->");
               api.post('/realtime/heartbeat', {
                   user: currentUserName,
                   task_id: task.id
               }).catch(e => console.warn("Heartbeat failed", e)); 
           }, 5000); // 5 seconds (allows 2 missed beats before 15s timeout)
           
-          return () => clearInterval(interval);
+          return () => {
+              console.log("[Heartbeat] Stopping Loop");
+              clearInterval(interval);
+          };
       }
   }, [isPlaying, playingId, systemState, currentUserName]);
 
