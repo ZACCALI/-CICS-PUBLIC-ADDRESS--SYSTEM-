@@ -95,6 +95,7 @@ def stop_broadcast(user: str, type: str = "voice", task_id: Optional[str] = None
     elif type == 'voice':
         target_type = TaskType.VOICE
     
+    print(f"[RealTime] Stop Request Received from {user} with Type {type}")
     controller.stop_task(task_id, task_type=target_type, user=user)
     return {"message": "Broadcast Stopped"}
 

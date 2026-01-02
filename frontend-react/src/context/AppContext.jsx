@@ -566,7 +566,18 @@ export const AppProvider = ({ children }) => {
         // sendBeacon passes data as text/plain by default if string, or blob. 
         // Our backend expects POST with query params, so empty body is fine.
         const blob = new Blob([], { type: 'application/json' });
-        navigator.sendBeacon(urlBg, blob);
+        const beaconSent = navigator.sendBeacon(urlBg, blob);
+        
+        // Fallback or Double-Tap: If Beacon fails or just to be safe, try fetch with keepalive
+        // (Some browsers implement one better than the other)
+        if (!beaconSent) {
+             console.warn("Beacon failed, trying fetch...");
+             fetch(urlBg, { 
+                 method: 'POST', 
+                 keepalive: true,
+                 headers: { 'Content-Type': 'application/json' }
+             }).catch(e => console.error("Unload fetch failed", e));
+        }
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
