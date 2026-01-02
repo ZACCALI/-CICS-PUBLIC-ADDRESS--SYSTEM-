@@ -196,8 +196,8 @@ class PAController:
                         now = datetime.now()
                         diff = (now - self.current_task.last_heartbeat).total_seconds()
                         
-                        # TIMEOUT: 15 seconds (allows for network lag of 3 missed beats)
-                        if diff > 15:
+                        # TIMEOUT: 30 seconds (Increased for resilience)
+                        if diff > 30:
                             print(f"[Watchdog] Task {self.current_task.id} timed out (Last Beat: {diff:.1f}s ago). Killing.")
                             # Call stop_task internally (release lock first? No, we have lock. stop_task uses lock.)
                             # We can't call stop_task because it uses @lock.
