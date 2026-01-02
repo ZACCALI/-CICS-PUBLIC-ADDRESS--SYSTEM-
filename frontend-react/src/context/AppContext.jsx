@@ -550,10 +550,9 @@ export const AppProvider = ({ children }) => {
         const token = authTokenRef.current;
         if (!token) return;
 
-        const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
-        // Use type='voice' so we ONLY kill live microphone sessions.
-        // Background music should PERSIST even if the user closes the tab (it's a system state).
-        const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop?user=${encodeURIComponent(possibleUser)}&type=voice`;
+        // Use type='any' to ensure we kill whatever is running by this user (Voice OR Music)
+        // User requested: Refreshing tab should STOP the audio.
+        const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop?user=${encodeURIComponent(possibleUser)}&type=any`;
         
         fetch(urlBg, { 
             method: 'POST', 
