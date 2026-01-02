@@ -141,35 +141,55 @@ const Upload = () => {
   // RESUME LOGIC (Watch System State)
   // SYNC STATE ON LOAD/REFRESH
   useEffect(() => {
-      if (!systemState?.active_task) return;
+      // 1. Initial Load Check
+      if (!systemState?.active_task) {
+          // If system went Idle but we think we are playing, RESET
+          if (playingId && isPlaying) {
+             setPlayingId(null);
+             setIsPlaying(false);
+             if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
+          }
+          return;
+      }
 
       const task = systemState.active_task;
-      // If we are fresh (no playingId) but system says Music is Playing
-      if (!playingId && task.type === 'BACKGROUND') {
-          console.log("[State Sync] Found active background task:", task);
+      
+      // If It's Background Music
+      if (task.type === 'BACKGROUND') {
+          // Identify the file
+          const contentName = task.data?.content; // "SongName.mp3"
+          let filename = contentName;
           
-          // 1. Find the file ID from the task data
-          // task.data.file might be the filename or full path. We need to match it to our 'files' list.
-          // The backend stores 'file': 'path/to/song.mp3'. Our 'files' list has 'id' (filename) and 'url'.
-          const filename = task.data?.file ? task.data.file.split(/[/\\]/).pop() : null;
+          if (!filename && task.data?.file) {
+               // Fallback to path parsing
+               filename = task.data.file.split(/[/\\]/).pop();
+          }
+
+          console.log(`[State Sync] System Playing: ${filename} (Local: ${playingId})`);
           
           if (filename) {
-              const fileMatch = files.find(f => f.name === filename || f.id === filename);
+              const fileMatch = files.find(f => f.name === filename || f.id === filename || (f.url && f.url.includes(filename)));
+              
               if (fileMatch) {
-                  console.log("[State Sync] Restoring Player State for:", fileMatch.name);
-                  setPlayingId(fileMatch.id);
-                  setIsPlaying(true); 
-                  // Ideally we would sync currentTime too if backend provided it, but it doesn't yet.
-                  // For now, it will start from 0 visually, but backend is already playing.
-                  // Since audio.volume=0, it doesn't matter if we 'play' locally from 0.
-                  // BUT we want the valid seeking UI. 
-                  if (audioRef.current) {
-                      audioRef.current.src = fileMatch.url;
-                      // Don't call play() immediately to avoid double-audio glitches if using browser audio. 
-                      // But we ARE using browser audio (muted) for timing.
-                      // So we SHOULD play.
-                      audioRef.current.play().catch(e => console.error("Sync Play failed", e));
+                  // Only update if different
+                  if (playingId !== fileMatch.id) {
+                      console.log("[State Sync] Restoring Player UI for:", fileMatch.name);
+                      setPlayingId(fileMatch.id);
+                      setIsPlaying(true); 
+                      
+                      // Restore Audio Element for Seek UI
+                      if (audioRef.current) {
+                          audioRef.current.src = fileMatch.url;
+                          // Force Play (Muted) to sync timers
+                          audioRef.current.play().catch(() => {});
+                      }
+                  } else {
+                      // Already matching, just ensure playing
+                      if (!isPlaying) setIsPlaying(true);
                   }
+              } else {
+                  console.warn("[State Sync] File not found in local list:", filename);
+                  // Optional: Show a "Unknown Track" state?
               }
           }
       }
@@ -227,6 +247,15 @@ const Upload = () => {
           return;
       }
       if (isProcessing.current) return;
+      
+      // ZONE CHECK
+      const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+      if (activeZonesKey.length === 0) {
+          setErrorMessage("Please select at least one Zone to play music.");
+          setShowErrorModal(true);
+          return;
+      }
+
       isProcessing.current = true;
       
       const fileToPlay = files.find(f => f.id === id);

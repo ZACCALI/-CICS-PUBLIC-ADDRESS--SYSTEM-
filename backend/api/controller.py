@@ -324,10 +324,11 @@ class PAController:
                 # However, "Interrupted" is different. 
                 # Let's keep resume_time until a NEW background task is started.
             
+            stopped_type = self.current_task.type if self.current_task else None
+            
             self.current_task = None
             audio_service.stop()
             
-            # Application of Time Shift (System became IDLE)
             # Application of Time Shift (System became IDLE)
             self._apply_queue_shift()
 
@@ -342,7 +343,20 @@ class PAController:
             )
 
             # RESUME SUSPENDED TASK
-            if self.suspended_task:
+            # FIX: If we just MANUALLY stopped a Background task (Pause), we should NOT resume an old Background task.
+            # We should only resume if the stopped task was a High-Priority Interruption (Voice/Schedule).
+            
+                 # But if we just stopped Background (Manual Stop), we want SILENCE.
+                 if self.current_task_type_was_background: # We need to know what we just stopped.
+                      if self.suspended_task.type == TaskType.BACKGROUND:
+                           print("[Controller] Manual Stop of Background: Clearing suspended background task.")
+                           self.suspended_task = None
+                      else:
+                           should_resume = True
+                 else:
+                      should_resume = True
+
+            if self.suspended_task and should_resume:
                  print(f"[Controller] [RESUME] Found Suspended Task: {self.suspended_task.type} (ID: {self.suspended_task.id})")
                  # Small delay for smooth transition
                  time.sleep(1)
