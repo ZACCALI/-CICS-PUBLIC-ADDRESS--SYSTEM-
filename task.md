@@ -12,6 +12,8 @@
 - [x] Fix mediaStreamRef error in RealTime.jsx <!-- id: 15 -->
 - [x] Verify fixes on Raspberry Pi setup <!-- id: 4 -->
 - [x] Push changes to GitHub <!-- id: 5 -->
+- [x] Fix remote backend connection (CORS & startup script) <!-- id: 16 -->
+- [x] Implement Heartbeat for 100% reliable Audio Stop <!-- id: 17 -->
 - [ ] **Verification**
     - [ ] Verify "Clear All" persists (already implemented `cleared_by`, check logic).
     - [ ] Verify Red Dot appears for new items and disappears on open.
