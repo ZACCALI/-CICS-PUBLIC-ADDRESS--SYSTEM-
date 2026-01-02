@@ -142,36 +142,37 @@ const Upload = () => {
   }, [files, playingId]); 
 
   // HEARTBEAT LOGIC: Keep backend task alive
-  useEffect(() => {
-      if (!isPlaying || !playingId || !systemState?.active_task) return;
-      
-      const task = systemState.active_task;
-      
-      // DEBUG: Log Heartbeat Decision
-      const type = task.type?.toLowerCase(); // Normalize
-      
-      if (type === 'background') {
-           console.log(`[Heartbeat Check] MyUser: '${currentUserName}' vs TaskUser: '${task.data?.user}'`);
-      }
+  // CRITICAL FIX: Extract values so effect doesn't re-run on every systemState update
+  const activeTaskId = systemState?.active_task?.id;
+  const activeTaskUser = systemState?.active_task?.data?.user;
+  const activeTaskType = systemState?.active_task?.type?.toLowerCase();
 
+  useEffect(() => {
+      // Only proceed if playing and we have an active task
+      if (!isPlaying || !playingId || !activeTaskId) return;
+      
       // Only send heartbeat if WE are the owner and it is BACKGROUND music
-      if (type === 'background' && task.data?.user === currentUserName) {
-          console.log("[Heartbeat] Starting Heartbeat Loop for Task:", task.id);
+      if (activeTaskType === 'background' && activeTaskUser === currentUserName) {
+          console.log("[Heartbeat] Starting Heartbeat Loop for Task:", activeTaskId);
+          
+          // Send IMMEDIATE Heartbeat to prevent initial gap
+          api.post('/realtime/heartbeat', { user: currentUserName, task_id: activeTaskId }).catch(() => {});
+
           const interval = setInterval(() => {
               // Send heartbeat
-              // console.log("[Heartbeat] Bump ->"); // Filter spam
+              // console.log("[Heartbeat] Bump ->"); 
               api.post('/realtime/heartbeat', {
                   user: currentUserName,
-                  task_id: task.id
+                  task_id: activeTaskId
               }).catch(e => console.warn("Heartbeat failed", e)); 
-          }, 5000); // 5 seconds (allows 2 missed beats before 15s timeout)
+          }, 5000); 
           
           return () => {
               console.log("[Heartbeat] Stopping Loop");
               clearInterval(interval);
           };
       }
-  }, [isPlaying, playingId, systemState, currentUserName]);
+  }, [isPlaying, playingId, activeTaskId, activeTaskUser, currentUserName, activeTaskType]);
 
   // RESUME LOGIC (Watch System State)
   // SYNC STATE ON LOAD/REFRESH
