@@ -552,7 +552,14 @@ export const AppProvider = ({ children }) => {
 
         // Use type='any' to ensure we kill whatever is running by this user (Voice OR Music)
         // User requested: Refreshing tab should STOP the audio.
-        const baseUrl = api.defaults.baseURL || 'http://localhost:8000';
+        let baseUrl = api.defaults.baseURL || 'http://localhost:8000';
+        if (baseUrl.startsWith('/')) {
+            // Resolve relative path to absolute URL for sendBeacon
+            baseUrl = window.location.origin + baseUrl;
+        }
+        // Remove trailing slash if present to avoid double slashes
+        if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+        
         const urlBg = `${baseUrl}/realtime/stop?user=${encodeURIComponent(possibleUser)}&type=any&token=${token}`;
         
         // Use sendBeacon for reliable delivery on unload

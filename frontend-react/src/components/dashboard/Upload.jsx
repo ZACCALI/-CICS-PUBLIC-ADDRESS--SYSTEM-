@@ -211,7 +211,6 @@ const Upload = () => {
       // Check System State
       if (systemState?.active_task) {
           const task = systemState.active_task;
-          const currentUserName = currentUserName;
           const isMyUser = task.data?.user === currentUserName;
           
           if (task.type === 'BACKGROUND' || task.priority === 10) {
