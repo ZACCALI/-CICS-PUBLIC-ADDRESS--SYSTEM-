@@ -3,11 +3,9 @@ import { auth } from '../firebase';
 
 const api = axios.create({
   // AUTO-DETECT BACKEND:
-  // 1. If we are on Cloudflare (hostname contains 'trycloudflare.com'), use RELATIVE path (API is proxied).
-  // 2. Otherwise default to Environment Variable or Localhost.
-  baseURL: window.location.hostname.includes('trycloudflare.com') 
-      ? '/' 
-      : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'),
+  // If we are served by the backend (Production), use relative path.
+  // We only need absolute URL for local dev (npm run dev vs python app.py)
+  baseURL: import.meta.env.DEV ? (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') : '/',
 });
 
 // Request interceptor to add the Firebase Token to requests
