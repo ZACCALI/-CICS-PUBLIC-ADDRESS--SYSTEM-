@@ -148,17 +148,18 @@ const Upload = () => {
       const task = systemState.active_task;
       
       // DEBUG: Log Heartbeat Decision
-      if (task.type === 'BACKGROUND') {
+      const type = task.type?.toLowerCase(); // Normalize
+      
+      if (type === 'background') {
            console.log(`[Heartbeat Check] MyUser: '${currentUserName}' vs TaskUser: '${task.data?.user}'`);
       }
 
       // Only send heartbeat if WE are the owner and it is BACKGROUND music
-      // Relaxed Check: Compare loosely or trim?
-      if (task.type === 'BACKGROUND' && task.data?.user === currentUserName) {
+      if (type === 'background' && task.data?.user === currentUserName) {
           console.log("[Heartbeat] Starting Heartbeat Loop for Task:", task.id);
           const interval = setInterval(() => {
               // Send heartbeat
-              console.log("[Heartbeat] Bump ->");
+              // console.log("[Heartbeat] Bump ->"); // Filter spam
               api.post('/realtime/heartbeat', {
                   user: currentUserName,
                   task_id: task.id
@@ -187,9 +188,10 @@ const Upload = () => {
       }
 
       const task = systemState.active_task;
-      
+      const type = task.type?.toLowerCase();
+
       // If It's Background Music
-      if (task.type === 'BACKGROUND') {
+      if (type === 'background') {
           // Identify the file
           const contentName = task.data?.content; // "SongName.mp3"
           let filename = contentName;
@@ -243,8 +245,9 @@ const Upload = () => {
       if (systemState?.active_task) {
           const task = systemState.active_task;
           const isMyUser = task.data?.user === currentUserName;
+          const type = task.type?.toLowerCase(); 
           
-          if (task.type === 'BACKGROUND' || task.priority === 10) {
+          if (type === 'background' || task.priority === 10) {
               // It's Background Mode. ONLY auto-resume if NOT manually paused.
              if (isMyUser && audioRef.current.paused && !isManuallyPaused.current) {
                  console.log("[Resume Logic] System Idle -> Auto-Resuming", currentUserName);
