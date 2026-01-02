@@ -31,13 +31,24 @@ for i in {1..15}; do
     fi
 done
 
+
+# 4. Display Access Information
+LOCAL_IP=$(hostname -I | cut -d' ' -f1)
 echo "--------------------------------------------------"
+echo "✅ Backend is UP and RUNNING!"
+echo ""
+echo "📱 LOCAL ACCESS (Same WiFi):"
+echo "   http://$LOCAL_IP:8000"
+echo ""
+echo "☁️  CLOUD ACCESS (Anywhere):"
+echo "   (Copy the trycloudflare.com link below)"
+echo "--------------------------------------------------"
+
 echo "Starting Cloudflare Tunnel..."
-echo "COPY THE URL BELOW (trycloudflare.com) to access remote."
 echo "Press Ctrl+C to stop everything."
 echo "--------------------------------------------------"
 
-# 4. Start Cloudflare Tunnel (Foreground)
+# 5. Start Cloudflare Tunnel (Foreground)
 cloudflared tunnel --url http://127.0.0.1:8000
 
 # Cleanup on exit
