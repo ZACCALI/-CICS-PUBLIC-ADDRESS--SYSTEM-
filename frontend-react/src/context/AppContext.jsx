@@ -552,16 +552,14 @@ export const AppProvider = ({ children }) => {
 
         // Use type='any' to ensure we kill whatever is running by this user (Voice OR Music)
         // User requested: Refreshing tab should STOP the audio.
-        const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop?user=${encodeURIComponent(possibleUser)}&type=any`;
+        const baseUrl = api.defaults.baseURL || 'http://localhost:8000';
+        const urlBg = `${baseUrl}/realtime/stop?user=${encodeURIComponent(possibleUser)}&type=any&token=${token}`;
         
-        fetch(urlBg, { 
-            method: 'POST', 
-            keepalive: true, 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            } 
-        });
+        // Use sendBeacon for reliable delivery on unload
+        // sendBeacon passes data as text/plain by default if string, or blob. 
+        // Our backend expects POST with query params, so empty body is fine.
+        const blob = new Blob([], { type: 'application/json' });
+        navigator.sendBeacon(urlBg, blob);
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);

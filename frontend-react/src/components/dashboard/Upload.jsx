@@ -7,6 +7,9 @@ import api from '../../api/axios';
 const Upload = () => {
   const { files, addFile, deleteFile, logActivity, updateLog, emergencyActive, systemState, zones, setZones } = useApp();
   const { currentUser } = useAuth();
+  
+  // Normalize User Name to match AppContext
+  const currentUserName = currentUser?.displayName || 'Admin';
   const fileInputRef = useRef(null);
   
   // Audio Player State
@@ -55,7 +58,7 @@ const Upload = () => {
 
   const stopPlayback = async () => {
       try {
-          await api.post(`/realtime/stop?user=${encodeURIComponent(currentUser?.name || 'Admin')}&type=background`);
+          await api.post(`/realtime/stop?user=${encodeURIComponent(currentUserName)}&type=background`);
       } catch (e) { /* Ignore if already stopped */ }
 
       if (audioRef.current) {
@@ -95,7 +98,7 @@ const Upload = () => {
           try {
               console.log("[Upload] Syncing Seek to Pi:", time);
               await api.post('/realtime/seek', {
-                  user: currentUser?.name || 'Admin',
+                  user: currentUserName,
                   time: time
               });
           } catch (err) {
@@ -208,7 +211,7 @@ const Upload = () => {
       // Check System State
       if (systemState?.active_task) {
           const task = systemState.active_task;
-          const currentUserName = currentUser?.name || 'Admin';
+          const currentUserName = currentUserName;
           const isMyUser = task.data?.user === currentUserName;
           
           if (task.type === 'BACKGROUND' || task.priority === 10) {
@@ -281,7 +284,7 @@ const Upload = () => {
                   const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
 
                   await api.post('/realtime/start', {
-                      user: currentUser?.name || 'Admin',
+                      user: currentUserName,
                       zones: targetZones, 
                       type: 'background',
                       content: fileToPlay.name,
@@ -299,7 +302,7 @@ const Upload = () => {
               isManuallyPaused.current = true;
               audioRef.current.pause();
               try {
-                  await api.post(`/realtime/stop?user=${encodeURIComponent(currentUser?.name || 'Admin')}&type=background`);
+                  await api.post(`/realtime/stop?user=${encodeURIComponent(currentUserName)}&type=background`);
               } catch (e) {
                   console.warn("Failed to notify backend of pause", e);
               }
@@ -324,7 +327,7 @@ const Upload = () => {
                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
 
                  await api.post('/realtime/start', {
-                     user: currentUser?.name || 'Admin',
+                     user: currentUserName,
                      zones: targetZones, 
                      type: 'background',
                      content: fileToPlay.name,
@@ -336,7 +339,7 @@ const Upload = () => {
                  // Log activity
              try {
                  const newLogId = await logActivity(
-                     currentUser?.name || 'Admin',
+                     currentUserName,
                      'Music Session',
                      'Music',
                      `${fileToPlay.name} (Start: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
@@ -382,7 +385,7 @@ const Upload = () => {
           formData.append('file', file);
           
           try {
-              const res = await api.post(`/files/upload?user=${encodeURIComponent(currentUser?.name || 'Admin')}`, formData, {
+              const res = await api.post(`/files/upload?user=${encodeURIComponent(currentUserName)}`, formData, {
                   headers: { 'Content-Type': 'multipart/form-data' }
               });
               
@@ -491,7 +494,7 @@ const Upload = () => {
         )}
 
         {/* ... System Busy Alert Omitted ... */}
-        {systemState?.active_task && systemState.active_task.data?.user !== (currentUser?.name || 'Admin') && (
+        {systemState?.active_task && systemState.active_task.data?.user !== (currentUserName) && (
             <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-800 p-4 rounded shadow-sm flex items-center animate-fade-in">
                 <i className="material-icons text-2xl mr-3">lock</i>
                 <div>
@@ -655,7 +658,7 @@ const Upload = () => {
          {filteredFiles.length > 0 ? (
              <div className="space-y-2 max-h-[400px] overflow-y-auto mb-4 pr-1">
                   {filteredFiles.map((file) => {
-                      const isLocked = systemState?.active_task && systemState.active_task.data?.user !== (currentUser?.name || 'Admin');
+                      const isLocked = systemState?.active_task && systemState.active_task.data?.user !== (currentUserName);
                       return (
                       <div 
                          key={file.id} 

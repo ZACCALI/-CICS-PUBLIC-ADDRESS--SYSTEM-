@@ -5,22 +5,30 @@ from api.notification_service import notification_service
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
-async def verify_token(authorization: str = Header(...)):
+async def verify_token(authorization: str = Header(None), token: str = None):
     """
-    Verifies the Firebase ID token passed in the Authorization header.
-    Returns the decoded token if valid.
+    Verifies the Firebase ID token.
+    Accepts 'Authorization' header (Bearer token) OR 'token' query parameter (for sendBeacon).
     """
-    if not authorization.startswith("Bearer "):
+    id_token = None
+
+    # 1. Try Header
+    if authorization and authorization.startswith("Bearer "):
+        id_token = authorization.split("Bearer ")[1]
+    
+    # 2. Try Query Param (Fallback)
+    if not id_token and token:
+        id_token = token
+
+    if not id_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
         )
     
-    token = authorization.split("Bearer ")[1]
-    
     try:
         # Allow 60 seconds of clock skew to prevent "Token used too early" errors
-        decoded_token = auth.verify_id_token(token, clock_skew_seconds=60)
+        decoded_token = auth.verify_id_token(id_token, clock_skew_seconds=60)
         return decoded_token
     except Exception as e:
         print(f"Error verifying token: {e}") # Debug logging
