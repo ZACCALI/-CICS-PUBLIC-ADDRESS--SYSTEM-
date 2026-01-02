@@ -10,8 +10,18 @@ fi
 # 1. Activate Virtual Environment
 source venv/bin/activate
 
-# 2. Start Backend in Background (Log to backend.log)
+# 2. Cleanup: user might have zombie processes
 echo "--------------------------------------------------"
+echo "Checking for existing backend..."
+# Try using lsof to find PID on port 8000 and kill it
+PID=$(lsof -t -i:8000)
+if [ -n "$PID" ]; then
+    echo "Killing old process on port 8000 (PID: $PID)..."
+    kill -9 $PID
+    sleep 2
+fi
+
+# 3. Start Backend in Background (Log to backend.log)
 echo "Starting FastAPI Backend..."
 nohup python app.py > backend.log 2>&1 &
 BACKEND_PID=$!
