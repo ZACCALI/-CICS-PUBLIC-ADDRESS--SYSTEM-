@@ -141,6 +141,25 @@ const Upload = () => {
       };
   }, [files, playingId]); 
 
+  // HEARTBEAT LOGIC: Keep backend task alive
+  useEffect(() => {
+      if (!isPlaying || !playingId || !systemState?.active_task) return;
+      
+      // Only send heartbeat if WE are the owner and it is BACKGROUND music
+      const task = systemState.active_task;
+      if (task.type === 'BACKGROUND' && task.data?.user === currentUserName) {
+          const interval = setInterval(() => {
+              // Send heartbeat
+              api.post('/realtime/heartbeat', {
+                  user: currentUserName,
+                  task_id: task.id
+              }).catch(e => console.warn("Heartbeat failed", e)); 
+          }, 5000); // 5 seconds (allows 2 missed beats before 15s timeout)
+          
+          return () => clearInterval(interval);
+      }
+  }, [isPlaying, playingId, systemState, currentUserName]);
+
   // RESUME LOGIC (Watch System State)
   // SYNC STATE ON LOAD/REFRESH
   useEffect(() => {

@@ -140,6 +140,19 @@ def log_broadcast(action: BroadcastAction, user_token: dict = Depends(verify_tok
         print(f"Logging failed: {e}")
         return {"message": "Logged (fallback)", "id": None}
 
+class HeartbeatRequest(BaseModel):
+    user: str
+    task_id: Optional[str] = None
+
+@real_time_announcements_router.post("/heartbeat")
+def heartbeat(req: HeartbeatRequest, user_token: dict = Depends(verify_token)):
+    """
+    Called periodically by frontend to keep task alive.
+    If backend sees no heartbeat for X seconds, it kills the task.
+    """
+    controller.update_heartbeat(req.user, req.task_id)
+    return {"status": "ok"}
+
 @real_time_announcements_router.get("/logs")
 def get_logs():
     try:

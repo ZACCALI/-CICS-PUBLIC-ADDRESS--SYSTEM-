@@ -49,6 +49,7 @@ class Task:
         self.status = status
         self.created_at = created_at if created_at else datetime.now()
         self.scheduled_time = scheduled_time if scheduled_time else datetime.now()
+        self.last_heartbeat = datetime.now() # Initialize with creation time
 
     def to_dict(self):
         return {
@@ -98,6 +99,9 @@ class PAController:
         
         # Cleanup State
         self.last_cleanup = datetime.now()
+
+        # Watchdog Thread (Heartbeat Monitor)
+        threading.Thread(target=self._watchdog_loop, daemon=True).start()
 
         # Start Scheduler Thread
         self.scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
@@ -164,6 +168,64 @@ class PAController:
             
         except Exception as e:
             print(f"[Controller] Failed to load pending schedules: {e}")
+
+    # --- HEARTBEAT & WATCHDOG ---
+    def update_heartbeat(self, user: str, task_id: str = None):
+        with self._lock:
+            if self.current_task:
+                 # Check User Ownership
+                 if self.current_task.data.get('user') == user:
+                     # Check ID (if provided)
+                     if task_id and self.current_task.id != task_id:
+                         return # ID Mismatch
+                     
+                     self.current_task.last_heartbeat = datetime.now()
+                     # print(f"[Controller] Heartbeat received for {self.current_task.id} (User: {user})") 
+
+    def _watchdog_loop(self):
+        """Monitors active tasks for heartbeat timeouts."""
+        while self._running:
+            try:
+                time.sleep(5) # Check every 5 seconds
+                with self._lock:
+                    if self.current_task and self.current_task.type == TaskType.BACKGROUND:
+                        # Only Background Music needs heartbeats (Voice/Emergency are short-lived or blocking)
+                        # Actually Voice might need it? No, voice is chunked. 
+                        # Background is the main one that persists on tabs.
+                        
+                        now = datetime.now()
+                        diff = (now - self.current_task.last_heartbeat).total_seconds()
+                        
+                        # TIMEOUT: 15 seconds (allows for network lag of 3 missed beats)
+                        if diff > 15:
+                            print(f"[Watchdog] Task {self.current_task.id} timed out (Last Beat: {diff:.1f}s ago). Killing.")
+                            # Call stop_task internally (release lock first? No, we have lock. stop_task uses lock.)
+                            # We can't call stop_task because it uses @lock.
+                            # So we copy logic or release lock.
+                            # Re-entrant lock logic: threading.Lock is NOT re-entrant.
+                            # We must manually stop it here.
+                            
+                            print(f"[Watchdog] FORCE STOPPING {self.current_task.id}")
+                            
+                            # Capture state for resume (if valid) - NO, Timeout means abandoned session.
+                            # So we clear suspended task too if it matches?
+                            self.suspended_task = None 
+                            
+                            # Stop Audio
+                            audio_service.stop()
+                            
+                            # Update Notification Logic (Optional)
+                            
+                            # Update State
+                            self.current_task.status = State.COMPLETED
+                            self._update_system_state_doc(None)
+                            self.current_task = None
+                            
+                            # Resume suspended? Maybe. 
+                            # If I timed out, maybe the previous queued item should play.
+                            # But usually timeout means "Silence".
+            except Exception as e:
+                print(f"[Watchdog] Error: {e}")
 
     # --- MAIN ENTRY POINT ---
     def request_playback(self, new_task: Task) -> bool:

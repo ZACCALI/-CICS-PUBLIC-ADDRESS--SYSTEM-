@@ -550,14 +550,17 @@ export const AppProvider = ({ children }) => {
         const token = authTokenRef.current;
         if (!token) return;
 
+        // FIX: Ensure Username matches Upload.jsx exactly.
+        // If displayName is null/undefined, Upload.jsx uses 'Admin'. We must do the same.
+        // Old Logic: (currentUser ? currentUser.displayName : 'Admin') -> returns null if currentUser exists but has no name.
+        const userName = (currentUser && currentUser.displayName) ? currentUser.displayName : 'Admin';
+        const possibleUser = currentBroadcasterRef.current || userName;
+
         // Use type='any' to ensure we kill whatever is running by this user (Voice OR Music)
-        // User requested: Refreshing tab should STOP the audio.
         let baseUrl = api.defaults.baseURL || 'http://localhost:8000';
         if (baseUrl.startsWith('/')) {
-            // Resolve relative path to absolute URL for sendBeacon
             baseUrl = window.location.origin + baseUrl;
         }
-        // Remove trailing slash if present to avoid double slashes
         if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
         
         const urlBg = `${baseUrl}/realtime/stop?user=${encodeURIComponent(possibleUser)}&type=any&token=${token}`;
