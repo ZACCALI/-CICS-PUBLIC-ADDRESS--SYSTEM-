@@ -419,12 +419,17 @@ class PAController:
         Called by heartbeat endpoint to keep session alive.
         Detects Session Switch (Refresh/New Tab) -> Kills old audio.
         """
+        # Debug Log
+        # print(f"[Controller] Heartbeat Rx: User={user}, Session={session_id}")
+
         # 1. Detect Conflict/Refresh
         if session_id:
             # If we knew this user, and the session ID changed...
             if user in self.user_sessions and self.user_sessions[user] != session_id:
-                print(f"[Controller] New Session Detected for {user} ({self.user_sessions[user]} -> {session_id})")
-                print("   -> Killing old session audio.")
+                print(f"[Controller] ⚠️ NEW SESSION DETECTED for {user}")
+                print(f"   -> Old: {self.user_sessions[user]}")
+                print(f"   -> New: {session_id}")
+                print("   -> 🛑 KILLING OLD SESSION AUDIO IMMEDIATELY.")
                 # Force Stop because it's a new tab/refresh
                 self.stop_session_task(user)
             

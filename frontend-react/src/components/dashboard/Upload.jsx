@@ -235,6 +235,16 @@ const Upload = () => {
           return;
       }
 
+      // NEW: Enforce Zone Selection (Moved to Top)
+      const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+      if (activeZonesKey.length === 0) {
+          setErrorMessage("Please select at least one zone to play audio.");
+          setShowErrorModal(true);
+          isProcessing.current = false;
+          return;
+      }
+      const targetZones = activeZonesKey;
+
       if (playingId === id) {
           // Toggle Pause/Play
           if (audioRef.current.paused) {
@@ -245,19 +255,8 @@ const Upload = () => {
                   const currentSecs = audioRef.current.currentTime || 0;
                   console.log(`[Upload] Starting on Pi at ${currentSecs}s`);
                   
-                  // Calculate active zones
-                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+                  // Zone Check already done above
                   
-                  // NEW: Enforce Zone Selection
-                  if (activeZonesKey.length === 0) {
-                      setErrorMessage("Please select at least one zone to play audio.");
-                      setShowErrorModal(true);
-                      isProcessing.current = false;
-                      return;
-                  }
-
-                  const targetZones = activeZonesKey;
-
                   await api.post('/realtime/start', {
                       user: currentUser?.name || 'Admin',
                       zones: targetZones, 
@@ -291,17 +290,8 @@ const Upload = () => {
              audioRef.current.src = fullUrl;
              
              try {
+                 // Zone Check Already Done
                  
-                 // NEW: Enforce Zone Selection
-                 const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-                 if (activeZonesKey.length === 0) {
-                      setErrorMessage("Please select at least one zone to play audio.");
-                      setShowErrorModal(true);
-                      isProcessing.current = false;
-                      return;
-                 }
-                 const targetZones = activeZonesKey;
-
                  setPlayingId(id);
                  startTimeRef.current = Date.now();
                  isManuallyPaused.current = false;
