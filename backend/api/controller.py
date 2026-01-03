@@ -215,7 +215,7 @@ class PAController:
                     self.background_play_start = None
 
                 # PREEMPTION
-                self._preempt_current_task(new_task.priority)
+                self._preempt_current_task(new_task.priority, new_task_type=new_task.type)
                 
                 # --- NEW: NON-BLOCKING EMERGENCY ---
                 if new_task.type == TaskType.EMERGENCY:
@@ -415,7 +415,7 @@ class PAController:
         # Sort by scheduled_time
         self.queue.sort(key=lambda x: x.scheduled_time)
 
-    def _preempt_current_task(self, new_priority):
+    def _preempt_current_task(self, new_priority, new_task_type=None):
         if not self.current_task:
             return
 
@@ -455,19 +455,26 @@ class PAController:
             )
             
         elif self.current_task.type == TaskType.BACKGROUND:
-            # Soft Stop: Suspend
-            print(f"  -> [SUSPEND] Suspending Background Task {self.current_task.id} for {new_priority}")
-            
-            # Save offset correctly
-            if self.background_play_start:
-                elapsed = (datetime.now() - self.background_play_start).total_seconds()
-                self.background_resume_time += elapsed
-                print(f"  -> Saved resume offset: {self.background_resume_time}s")
-                self.background_play_start = None
+            # CHECK: If New Task is ALSO Background, we should KILL, not Suspend.
+            if new_task_type == TaskType.BACKGROUND:
+                 print(f"  -> [KILL] Replacing Background Task {self.current_task.id} with new Background Task")
+                 self.current_task = None
+                 # Ensure we don't have a suspended task hanging around if we are switching
+                 self.suspended_task = None 
+            else:
+                 # Soft Stop: Suspend
+                 print(f"  -> [SUSPEND] Suspending Background Task {self.current_task.id} for {new_priority}")
+                 
+                 # Save offset correctly
+                 if self.background_play_start:
+                     elapsed = (datetime.now() - self.background_play_start).total_seconds()
+                     self.background_resume_time += elapsed
+                     print(f"  -> Saved resume offset: {self.background_resume_time}s")
+                     self.background_play_start = None
 
-            self.suspended_task = self.current_task
-            self.current_task = None
-            # Do NOT mark COMPLETED. State remains valid in object.
+                 self.suspended_task = self.current_task
+                 self.current_task = None
+                 # Do NOT mark COMPLETED. State remains valid in object.
         
         else:
              # Default Fallback
