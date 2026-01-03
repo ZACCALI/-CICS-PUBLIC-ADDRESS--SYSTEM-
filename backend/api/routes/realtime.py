@@ -18,8 +18,6 @@ class BroadcastRequest(BaseModel):
     voice: Optional[str] = None # 'female' or 'male'
     session_token: Optional[str] = None # NEW: Session Tracking
 
-    session_token: Optional[str] = None # NEW: Session Tracking
-
 class BroadcastAction(BaseModel):
     user: str
     type: str # 'voice' or 'text'
