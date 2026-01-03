@@ -555,15 +555,15 @@ export const AppProvider = ({ children }) => {
         // Background music should PERSIST even if the user closes the tab (it's a system state).
         const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}`;
         
-        // Use sendBeacon for reliable delivery during unload
-        const success = navigator.sendBeacon(urlBg);
-        if (!success) {
-            // Fallback for older browsers or if beacon queue full (very  rare)
-            fetch(urlBg, { 
-                method: 'POST', 
-                keepalive: true
-            });
-        }
+        // Use keepalive for reliable delivery during unload with Auth headers
+        fetch(urlBg, { 
+            method: 'POST', 
+            keepalive: true,
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
