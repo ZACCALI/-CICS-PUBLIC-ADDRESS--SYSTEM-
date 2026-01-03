@@ -265,7 +265,8 @@ const Upload = () => {
       }
       
       // Enforce Zone Selection
-      const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+      // Enforce Zone Selection(Already calculated above)
+      // activeZonesKey is reusing the variable from top of function
       if (activeZonesKey.length === 0 && playingId !== id) {
           setErrorMessage("Please select at least one zone before playing.");
           setShowErrorModal(true);
