@@ -645,33 +645,68 @@ class AudioService:
         else:
             subprocess.run(['aplay', '-D', 'plughw:0,0', file_path])
 
+    # --- ROBUST PROCESS MANAGEMENT ---
+    def _kill_process(self, process):
+        """Robustly kills a process and its children."""
+        if not process:
+            return
+
+        pid = process.pid
+        logger.info(f"Killing process {pid}...")
+
+        try:
+            # 1. Try standard terminate
+            process.terminate()
+            
+            # 2. Wait briefly
+            try:
+                process.wait(timeout=0.5)
+            except subprocess.TimeoutExpired:
+                 # 3. Force Kill (Windows/Linux)
+                if self.os_type == "Windows":
+                     subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+                else:
+                     # Linux: Kill process group if possible
+                     try:
+                         os.killpg(os.getpgid(pid), 9)
+                     except:     
+                         process.kill() 
+        except Exception as e:
+            logger.error(f"Error killing process {pid}: {e}")
+
+    def cleanup_all(self):
+        """Forcefully cleans up all audio processes on startup."""
+        self.stop()
+        if self.os_type == "Linux":
+             # Ensure no zombie libsox/mpg123 processes
+             try:
+                 subprocess.run(["pkill", "-9", "-f", "sox"], capture_output=True)
+                 subprocess.run(["pkill", "-9", "-f", "play"], capture_output=True)
+                 subprocess.run(["pkill", "-9", "-f", "mpg123"], capture_output=True)
+                 subprocess.run(["pkill", "-9", "-f", "aplay"], capture_output=True)
+             except: pass
+
     def stop(self):
         with self._lock:
-            if self.current_process:
-                try: self.current_process.terminate()
-                except: pass
-                self.current_process = None
-            
             # Stop Siren
             self._siren_stop_event.set()
             self._siren_active = False
             
-            # 1. Direct Process Termination
+            # Stop Legacy Process
+            if self.current_process:
+                self._kill_process(self.current_process)
+                self.current_process = None
+            
+            # Stop Tracked Processes
             with self.proc_lock:
                 for proc in self.active_processes:
-                    try:
-                        print(f"[AudioService] Terminating process {proc.pid}")
-                        proc.terminate()
-                        # Wait briefly for termination
-                        try: proc.wait(timeout=0.2)
-                        except: proc.kill()
-                    except: pass
+                    self._kill_process(proc)
                 self.active_processes.clear()
 
-            # 2. Linux Fallback: killall aplay? A bit aggressive but effective for "Stop" button.
+            # Linux Fallback (Aggressive Global Kill)
             if self.os_type != "Windows":
-                os.system("killall -q aplay")
-                os.system("killall -q play")
+                 # We prefer explicit tracking, but pkill is backup for orphans
+                 pass 
             
             self.stop_streaming()
 
