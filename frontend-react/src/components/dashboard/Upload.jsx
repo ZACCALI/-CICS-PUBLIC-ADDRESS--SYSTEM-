@@ -200,7 +200,6 @@ const Upload = () => {
       // Check System State
       if (systemState?.active_task) {
           const task = systemState.active_task;
-          const task = systemState.active_task;
           
           // Wait for user load to avoid "Admin" mismatch
           if (!currentUser) return; 
