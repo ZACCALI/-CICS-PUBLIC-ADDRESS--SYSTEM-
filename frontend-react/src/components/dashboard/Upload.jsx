@@ -318,7 +318,6 @@ const Upload = () => {
           }
       } else {
           // Play New
-          // New: Use 'url' from backend (Static File)
           if (fileToPlay.url) {
              const fullUrl = `${api.defaults.baseURL}${fileToPlay.url}`;
              console.log("Playing from URL:", fullUrl);
@@ -331,10 +330,9 @@ const Upload = () => {
                  setCurrentTime(0);
 
                  // Tell backend to start FRESH
-                 // Calculate active zones
                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
-                 // sessionToken is now from top-level scope
+                 // sessionToken is from top-level scope
 
                  await api.post('/realtime/start', {
                      user: currentUser?.name || 'Admin',
@@ -347,7 +345,17 @@ const Upload = () => {
                  
                  await audioRef.current.play();
                  
-                 // Log activity
+             } catch (err) {
+                 console.error("Playback load failed:", err);
+                 setErrorMessage("Could not play audio: " + err.message);
+                 setShowErrorModal(true);
+                 // Reset state on failure
+                 setPlayingId(null);
+                 isManuallyPaused.current = false;
+                 return; // Exit early
+             }
+             
+             // Log activity (Separate Try-Catch to not block playback if logging fails)
              try {
                  const newLogId = await logActivity(
                      currentUser?.name || 'Admin',
@@ -359,15 +367,10 @@ const Upload = () => {
              } catch (logErr) {
                  console.error("Logging failed", logErr);
              }
-             } catch (err) {
-                 console.error("Playback load failed:", err);
-                 setErrorMessage("Could not play audio: " + err.message);
-                 setShowErrorModal(true);
-             }
+
           } else if (fileToPlay.content) {
-              // Fallback for legacy local files (if any persist in cache)
+              // Fallback for legacy local files
               audioRef.current.src = fileToPlay.content;
-              // ... (Start play)
               await audioRef.current.play();
               setPlayingId(id);
           }
