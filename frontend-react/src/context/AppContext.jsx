@@ -561,8 +561,9 @@ export const AppProvider = ({ children }) => {
         // Pass token in Query Param so verify_token can read it (Beacon doesn't support Headers)
         const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
         
-        // Use sendBeacon - much more reliable for 'unload' than fetch
-        const blob = new Blob([JSON.stringify({ reason: "unload" })], { type: 'application/json' });
+        // Use sendBeacon - much more reliable for 'unload' than fetch.
+        // USE text/plain to avoid CORS Preflight (OPTIONS) check which fails on unload.
+        const blob = new Blob(["unload"], { type: 'text/plain' });
         const success = navigator.sendBeacon(urlBg, blob);
         
         if (!success) {

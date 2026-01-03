@@ -103,6 +103,7 @@ def stop_session_audio(user: str, user_token: dict = Depends(verify_token)):
     """
     Stops current audio if it's NOT a schedule. Called on logout.
     """
+    print(f"[API] RECEIVED STOP-SESSION REQUEST FOR: {user}")
     controller.stop_session_task(user)
     return {"message": "Session Audio Stopped"}
 
