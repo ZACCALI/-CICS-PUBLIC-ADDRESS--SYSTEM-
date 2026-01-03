@@ -134,9 +134,19 @@ const Upload = () => {
           audio.removeEventListener('play', () => setIsPlaying(true));
           audio.removeEventListener('pause', () => setIsPlaying(false));
           window.removeEventListener('stop-all-audio', handleStopGlobal);
-          audio.pause();
+          // DO NOT PAUSE HERE! It stops music when file list updates (e.g. upload).
+          // Pause is handled by separate unmount effect or explicit stop.
       };
   }, [files, playingId]); 
+
+  // Cleanup on Unmount ONLY
+  useEffect(() => {
+    return () => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+        }
+    };
+  }, []); 
 
   // RESUME LOGIC (Watch System State)
   // SYNC STATE ON LOAD/REFRESH
@@ -340,30 +350,44 @@ const Upload = () => {
 
   const handleFileChange = async (e) => {
       const selectedFiles = Array.from(e.target.files);
-      
-      for (const file of selectedFiles) {
-          // Check Duplication (by name, since ID is filename)
-          if (files.some(f => f.name === file.name)) {
-               setErrorMessage(`File "${file.name}" already exists.`);
-               setShowErrorModal(true);
-               continue;
-          }
+      const newFilesToUpload = [];
+      const duplicates = [];
 
-          const formData = new FormData();
-          formData.append('file', file);
-          
-          try {
-              const res = await api.post(`/files/upload?user=${encodeURIComponent(currentUser?.name || 'Admin')}`, formData, {
-                  headers: { 'Content-Type': 'multipart/form-data' }
-              });
+      // 1. Filter Duplicates
+      for (const file of selectedFiles) {
+          if (files.some(f => f.name === file.name)) {
+               duplicates.push(file.name);
+          } else {
+               newFilesToUpload.push(file);
+          }
+      }
+
+      // 2. Show Error for Duplicates (Single Modal)
+      if (duplicates.length > 0) {
+           setErrorMessage(`Skipped ${duplicates.length} duplicate file(s): ${duplicates.join(', ')}`);
+           setShowErrorModal(true);
+      }
+
+      // 3. Upload New Files
+      if (newFilesToUpload.length > 0) {
+          for (const file of newFilesToUpload) {
+              const formData = new FormData();
+              formData.append('file', file);
               
-              // Backend returns the file object which matches our needed structure
-              addFile(res.data);
-              
-          } catch (err) {
-              console.error("Upload failed", err);
-              setErrorMessage(`Failed to upload ${file.name}: ${err.response?.data?.detail || err.message}`);
-              setShowErrorModal(true);
+              try {
+                  const res = await api.post(`/files/upload?user=${encodeURIComponent(currentUser?.name || 'Admin')}`, formData, {
+                      headers: { 'Content-Type': 'multipart/form-data' }
+                  });
+                  addFile(res.data);
+              } catch (err) {
+                  console.error("Upload failed", err);
+                  // Don't override duplicate error message if it exists, maybe append?
+                  // For simplicity, just log or let user know. 
+                  // If we want to show error, we might conflict with duplicate modal.
+                  // Let's rely on console for individual failures to keep UI clean, or replace modal.
+                  setErrorMessage(`Failed to upload ${file.name}: ${err.response?.data?.detail || err.message}`);
+                  setShowErrorModal(true);
+              }
           }
       }
       

@@ -46,9 +46,7 @@ async def upload_file(file: UploadFile = File(...), user: str = Query("Unknown")
         
         # Check if file exists
         if os.path.exists(file_location):
-            # Allow overwrite or rename? For now, error or overwrite. 
-            # AppContext logic usually checks dupes, but backend is safer.
-            pass
+            raise HTTPException(status_code=409, detail=f"File '{file.filename}' already exists.")
 
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(file.file, file_object)
