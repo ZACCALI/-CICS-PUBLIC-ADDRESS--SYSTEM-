@@ -219,6 +219,12 @@ class PAController:
                     
                     self.background_play_start = None
 
+                    # NEW: Prime the heartbeat with the new session token to prevent race condition/immediate kill
+                    start_token = new_task.data.get('session_token')
+                    user = new_task.data.get('user')
+                    if user and start_token:
+                         self.register_heartbeat(user, start_token)
+
                 # PREEMPTION
                 self._preempt_current_task(new_task.priority)
                 
