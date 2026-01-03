@@ -284,7 +284,7 @@ const Upload = () => {
                   console.log(`[Upload] Starting on Pi at ${currentSecs}s`);
                   
                   // Calculate active zones
-                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+                  // activeZonesKey is already defined above
                   // If no zones selected (and not All Zones), default to All Zones to ensure playback? 
                   // Or respect silence? Let's default to All Zones if nothing selected to avoid confusion.
                   const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
