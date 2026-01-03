@@ -552,18 +552,15 @@ export const AppProvider = ({ children }) => {
 
         const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
         // Use type='voice' so we ONLY kill live microphone sessions.
-        // Background music should PERSIST even if the user closes the tab (it's a system state).
-        const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}`;
+        // Pass token in Query Param because sendBeacon cannot send Authorization Header
+        const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
         
-        // Use keepalive for reliable delivery during unload with Auth headers
-        fetch(urlBg, { 
-            method: 'POST', 
-            keepalive: true,
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            }
-        });
+        // Use sendBeacon for reliable delivery during unload
+        const success = navigator.sendBeacon(urlBg);
+        if (!success) {
+             // Fallback
+             fetch(urlBg, { method: 'POST', keepalive: true });
+        }
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);

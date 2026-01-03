@@ -99,10 +99,29 @@ def stop_broadcast(user: str, type: str = "voice", task_id: Optional[str] = None
     return {"message": "Broadcast Stopped"}
 
 @real_time_announcements_router.post("/stop-session")
-def stop_session_audio(user: str, user_token: dict = Depends(verify_token)):
+def stop_session_audio(user: str, token: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """
-    Stops current audio if it's NOT a schedule. Called on logout.
+    Stops current audio if it's NOT a schedule. Called on logout/tab close.
+    Accepts token via Header OR Query Param (for sendBeacon).
     """
+    # 1. Resolve Token
+    actual_token = None
+    if authorization and "Bearer " in authorization:
+        actual_token = authorization.split("Bearer ")[1]
+    elif token:
+        actual_token = token
+    
+    if not actual_token:
+         raise HTTPException(status_code=401, detail="Missing Token")
+
+    # 2. Verify
+    try:
+        from firebase_admin import auth
+        auth.verify_id_token(actual_token, clock_skew_seconds=60)
+    except Exception as e:
+        print(f"Token verification failed: {e}")
+        raise HTTPException(status_code=401, detail=f"Invalid Token: {e}")
+
     controller.stop_session_task(user)
     return {"message": "Session Audio Stopped"}
 
