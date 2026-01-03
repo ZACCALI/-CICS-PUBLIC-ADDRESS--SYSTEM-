@@ -576,16 +576,12 @@ export const AppProvider = ({ children }) => {
         // Background music should PERSIST even if the user closes the tab (it's a system state).
         // FIX: Use relative path (empty string fallback) so it works on Pi (accessed via IP), not Localhost.
         const baseUrl = api.defaults.baseURL || ''; 
-        const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}`;
+        // Pass token in Query Param because Beacon cannot set Headers
+        const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
         
-        fetch(urlBg, { 
-            method: 'POST', 
-            keepalive: true, 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            } 
-        });
+        // Use sendBeacon for maximum reliability during unload
+        const blob = new Blob([JSON.stringify({ type: 'unload' })], { type: 'application/json' });
+        navigator.sendBeacon(urlBg, blob);
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
