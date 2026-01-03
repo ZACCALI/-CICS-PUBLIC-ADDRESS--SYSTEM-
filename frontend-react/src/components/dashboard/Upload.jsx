@@ -158,30 +158,29 @@ const Upload = () => {
       if (!playingId && task.type === 'BACKGROUND') {
           console.log("[State Sync] Found active background task:", task);
           
-          // 1. Find the file ID from the task data
-          // task.data.file might be the filename or full path. We need to match it to our 'files' list.
-          // The backend stores 'file': 'path/to/song.mp3'. Our 'files' list has 'id' (filename) and 'url'.
+          // STRICT REFRESH LOGIC: If I refresh, I want the music to STOP.
+          // Check if this task belongs to ME. If so, it's a "Zombie" session. KILL IT.
+          const currentUserName = currentUser?.name || 'Admin';
+          if (task.data?.user === currentUserName) {
+              console.log("[State Sync] Detected existing session for ME. Stopping it (Refresh = Stop).");
+              // Send explicit stop
+              api.post(`/realtime/stop?user=${encodeURIComponent(currentUserName)}&type=background`)
+                 .catch(e => console.warn("Failed to stop zombie session", e));
+              return; // Do NOT restore state. Let it die.
+          }
+
+          // If it's someone else's music, maybe we want to tune in? 
+          // For now, let's just respect the "Fresh Start" rule. 
+          // If we want to support "Listening In", we'd enable the logic below.
+          /*
           const filename = task.data?.file ? task.data.file.split(/[/\\]/).pop() : null;
-          
           if (filename) {
               const fileMatch = files.find(f => f.name === filename || f.id === filename);
               if (fileMatch) {
-                  console.log("[State Sync] Restoring Player State for:", fileMatch.name);
-                  setPlayingId(fileMatch.id);
-                  setIsPlaying(true); 
-                  // Ideally we would sync currentTime too if backend provided it, but it doesn't yet.
-                  // For now, it will start from 0 visually, but backend is already playing.
-                  // Since audio.volume=0, it doesn't matter if we 'play' locally from 0.
-                  // BUT we want the valid seeking UI. 
-                  if (audioRef.current) {
-                      audioRef.current.src = fileMatch.url;
-                      // Don't call play() immediately to avoid double-audio glitches if using browser audio. 
-                      // But we ARE using browser audio (muted) for timing.
-                      // So we SHOULD play.
-                      audioRef.current.play().catch(e => console.error("Sync Play failed", e));
-                  }
+                   // ... (Restoring Logic Removed)
               }
           }
+          */
       }
   }, [systemState, files]); // Run when systemState or file list loads
 
@@ -202,19 +201,15 @@ const Upload = () => {
           const isMyUser = task.data?.user === currentUserName;
           
           if (task.type === 'BACKGROUND' || task.priority === 10) {
-              // It's Background Mode. ONLY auto-resume if NOT manually paused.
-             if (isMyUser && audioRef.current.paused && !isManuallyPaused.current) {
-                 console.log("[Resume Logic] System Idle -> Auto-Resuming", currentUserName);
-                 audioRef.current.play().catch(e => console.error("Resume failed", e));
-             } else {
-                 console.log("[Resume Logic] Stay Paused (Manual Pause Active or Not My Track)");
-             }
+              // It's Background Mode.
+              // Logic Removed: Auto-Resume.
+              // We only pause if needed.
+              // if (isMyUser && audioRef.current.paused && !isManuallyPaused.current) { ... }
           } else {
-              // Higher priority task active (Voice/Schedule) -> PAUSE
-              if (!audioRef.current.paused) {
-                   console.log(`[Resume Logic] Pausing for High Priority Task (${task.type})`);
+               // Higher priority task active -> PAUSE
+               if (!audioRef.current.paused) {
                    audioRef.current.pause();
-              }
+               }
           }
       } else {
           // System IDLE. 
