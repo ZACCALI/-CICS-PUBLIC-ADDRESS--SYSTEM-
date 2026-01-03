@@ -93,8 +93,10 @@ class PAController:
         self.background_play_start: Optional[datetime] = None
         self.last_background_content: Optional[str] = None
         
+        
         # Watchdog State
         self.last_heartbeat: Dict[str, float] = {}
+        self.user_sessions: Dict[str, str] = {} # user -> session_id
 
         # Reset Logic on init to ensure clean state
         self._reset_state()
@@ -412,12 +414,25 @@ class PAController:
         except Exception as e:
             print(f"[Controller] Chunk Error: {e}")
 
-    def update_heartbeat(self, user: str):
-        """Called by heartbeat endpoint to keep session alive"""
-        # No lock needed for atomic dict update usually, but safer
-        # Dict set is atomic in Python, so simple assignment is fine.
+    def update_heartbeat(self, user: str, session_id: Optional[str] = None):
+        """
+        Called by heartbeat endpoint to keep session alive.
+        Detects Session Switch (Refresh/New Tab) -> Kills old audio.
+        """
+        # 1. Detect Conflict/Refresh
+        if session_id:
+            # If we knew this user, and the session ID changed...
+            if user in self.user_sessions and self.user_sessions[user] != session_id:
+                print(f"[Controller] New Session Detected for {user} ({self.user_sessions[user]} -> {session_id})")
+                print("   -> Killing old session audio.")
+                # Force Stop because it's a new tab/refresh
+                self.stop_session_task(user)
+            
+            # Update Session ID
+            self.user_sessions[user] = session_id
+
+        # 2. Update Timestamp
         self.last_heartbeat[user] = time.time()
-        # print(f"[Controller] Heartbeat: {user}")
 
     # --- INTERNAL LOGIC ---
     def _add_to_queue(self, task: Task):

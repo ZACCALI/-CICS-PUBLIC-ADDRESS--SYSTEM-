@@ -31,25 +31,30 @@ export const AppProvider = ({ children }) => {
      return () => unsubAuth();
   }, []);
 
-  // Watchdog Heartbeat (5s Interval)
-  useEffect(() => {
-    if (!currentUser) return;
+    // Generate Unique Session ID for this tab load
+    const sessionIdRef = useRef('session-' + Math.random().toString(36).substr(2, 9));
 
-    const sendHeartbeat = async () => {
-        try {
-            await api.post(`/realtime/heartbeat?user=${encodeURIComponent(currentUser.displayName || 'Admin')}`);
-        } catch (e) {
-            // changes
-            console.warn("Heartbeat failed", e);
-        }
-    };
+    // Watchdog Heartbeat (5s Interval)
+    useEffect(() => {
+        if (!currentUser) return;
 
-    // Initial beat
-    sendHeartbeat();
-    
-    const interval = setInterval(sendHeartbeat, 5000); // 5s Interval
-    return () => clearInterval(interval);
-  }, [currentUser]);
+        const sendHeartbeat = async () => {
+            try {
+                // Send Token AND Session ID
+                const sid = sessionIdRef.current;
+                await api.post(`/realtime/heartbeat?user=${encodeURIComponent(currentUser.displayName || 'Admin')}&session_id=${sid}`);
+            } catch (e) {
+                // changes
+                console.warn("Heartbeat failed", e);
+            }
+        };
+
+        // Initial beat
+        sendHeartbeat();
+        
+        const interval = setInterval(sendHeartbeat, 5000); // 5s Interval
+        return () => clearInterval(interval);
+    }, [currentUser]);
 
   useEffect(() => {
       if (!currentUser) {

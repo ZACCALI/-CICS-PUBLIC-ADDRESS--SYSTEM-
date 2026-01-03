@@ -149,12 +149,12 @@ def seek_music(req: SeekRequest, user_token: dict = Depends(verify_token)):
     return {"message": "Seek successful"}
 
 @real_time_announcements_router.post("/heartbeat")
-def heartbeat(user: str, user_token: dict = Depends(verify_token)):
+def heartbeat(user: str, session_id: Optional[str] = None, user_token: dict = Depends(verify_token)):
     """
     Simple heartbeat to confirm connection and user presence.
-    Updates Watchdog timer.
+    Updates Watchdog timer AND detects Session Swaps (Refreshes).
     """
-    controller.update_heartbeat(user)
+    controller.update_heartbeat(user, session_id)
     return {"status": "ok", "user": user}
 
 @real_time_announcements_router.post("/log")
