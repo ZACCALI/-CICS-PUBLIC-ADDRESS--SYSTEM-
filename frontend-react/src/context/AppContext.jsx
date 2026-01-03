@@ -556,36 +556,20 @@ export const AppProvider = ({ children }) => {
         // Background music should PERSIST even if the user closes the tab (it's a system state).
         
         // FIX: Handle empty string baseURL (relative) correctly. Don't use || operator on it.
-        let baseUrl = api.defaults.baseURL;
+        const baseUrl = api.defaults.baseURL === undefined ? 'http://localhost:8000' : api.defaults.baseURL;
         
-        // 1. If baseUrl is explicitly empty or relative, resolve it against current location
-        // to Ensure we don't accidentally hit localhost if we are strictly on IP.
-        if (!baseUrl || baseUrl.startsWith('/')) {
-             // If we are serving from backend (production), origin is correct.
-             // If we are in dev, axios usually sets absolute. 
-             // BUT just in case axios failed or config is weird:
-             baseUrl = `${window.location.protocol}//${window.location.hostname}:8000`;
-             // Note: This forcibly assumes backend is on 8000. 
-             // If user changed backend port, this breaks, but 8000 is standard for this project.
-        }
-
         // Pass token in Query Param so verify_token can read it (Beacon doesn't support Headers)
         const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
         
         // Use sendBeacon - much more reliable for 'unload' than fetch
-        // CORS NOTE: fail on preflight (OPTIONS) if Content-Type is application/json during unload.
-        // We use text/plain to make it a "Simple Request" (No Preflight). 
-        // Backend ignores the body anyway.
-        const blob = new Blob(["unload"], { type: 'text/plain' });
+        const blob = new Blob([JSON.stringify({ reason: "unload" })], { type: 'application/json' });
         const success = navigator.sendBeacon(urlBg, blob);
         
         if (!success) {
             // Fallback to fetch if beacon fails (e.g. data too large, though unlikely here)
              fetch(urlBg, { 
                 method: 'POST', 
-                keepalive: true,
-                body: "unload",
-                headers: { 'Content-Type': 'text/plain' }
+                keepalive: true
             });
         }
     };

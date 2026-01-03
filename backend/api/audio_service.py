@@ -639,9 +639,7 @@ class AudioService:
     def stop(self):
         with self._lock:
             if self.current_process:
-                try: 
-                    self.current_process.terminate()
-                    self.current_process.kill() # Force kill
+                try: self.current_process.terminate()
                 except: pass
                 self.current_process = None
             
@@ -656,21 +654,15 @@ class AudioService:
                         print(f"[AudioService] Terminating process {proc.pid}")
                         proc.terminate()
                         # Wait briefly for termination
-                        try: 
-                            proc.wait(timeout=0.1)
-                        except subprocess.TimeoutExpired:
-                            print(f"[AudioService] Force killing process {proc.pid}")
-                            proc.kill()
+                        try: proc.wait(timeout=0.2)
+                        except: proc.kill()
                     except: pass
                 self.active_processes.clear()
 
-            # 2. Linux Fallback: Aggressive cleanup
+            # 2. Linux Fallback: killall aplay? A bit aggressive but effective for "Stop" button.
             if self.os_type != "Windows":
-                # 'play' is often an alias for 'sox'
-                # shutting down 'sox' covers both
-                os.system("killall -q -9 aplay")
-                os.system("killall -q -9 play") 
-                os.system("killall -q -9 sox")
+                os.system("killall -q aplay")
+                os.system("killall -q play")
             
             self.stop_streaming()
 
