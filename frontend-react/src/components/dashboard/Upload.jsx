@@ -244,6 +244,15 @@ const Upload = () => {
           isProcessing.current = false;
           return;
       }
+      
+      // Enforce Zone Selection
+      const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+      if (activeZonesKey.length === 0 && playingId !== id) {
+          setErrorMessage("Please select at least one zone before playing.");
+          setShowErrorModal(true);
+          isProcessing.current = false;
+          return;
+      }
 
       if (playingId === id) {
           // Toggle Pause/Play

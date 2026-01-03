@@ -162,10 +162,63 @@ class AudioService:
                 logger.error("espeak not installed. Cannot speak.")
 
 # Example usage if run directly
-if __name__ == "__main__":
-    service = AudioService()
-    print("Testing Female Voice...")
-    service.speak("Hello, this is the offline Piper Text to Speech service.", "female")
-    
-    print("Testing Male Voice...")
-    service.speak("This is the male voice option.", "male")
+    def _kill_process(self, process):
+        """Robustly kills a process and its children."""
+        if not process:
+            return
+
+        pid = process.pid
+        logger.info(f"Killing process {pid}...")
+
+        try:
+            # 1. Try standard terminate
+            process.terminate()
+            
+            # 2. Wait briefly
+            try:
+                process.wait(timeout=0.5)
+                return # Success
+            except subprocess.TimeoutExpired:
+                pass # Continue to force kill
+
+            # 3. Force Kill (Windows/Linux)
+            if self.os_type == "Windows":
+                 # Windows kill
+                 subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+            else:
+                 # Linux: Kill process group if possible, else standard kill
+                 try:
+                     os.killpg(os.getpgid(pid), 9) # SIGKILL to Group
+                 except:     
+                     process.kill() # Standard SIGKILL
+                     
+        except Exception as e:
+            logger.error(f"Error killing process {pid}: {e}")
+
+    def stop(self):
+        """Stops all active audio playback."""
+        logger.info("Stopping all audio...")
+        
+        # Stop generic process
+        if self.current_process:
+            self._kill_process(self.current_process)
+            self.current_process = None
+            
+        # Stop background process
+        if self.background_process:
+            self._kill_process(self.background_process)
+            self.background_process = None
+            
+        # Stop siren process
+        if self.siren_process:
+            self._kill_process(self.siren_process)
+            self.siren_process = None
+            
+        # Extra Safety: Pkill generic players if they persist
+        if self.os_type == "Linux":
+            try:
+                subprocess.run(["pkill", "-9", "-f", "play"], capture_output=True)
+                subprocess.run(["pkill", "-9", "-f", "paplay"], capture_output=True)
+                subprocess.run(["pkill", "-9", "-f", "mpg123"], capture_output=True)
+            except:
+                pass
