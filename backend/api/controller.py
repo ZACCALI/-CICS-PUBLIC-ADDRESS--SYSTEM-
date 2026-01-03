@@ -92,11 +92,6 @@ class PAController:
         self.background_resume_time = 0
         self.background_play_start: Optional[datetime] = None
         self.last_background_content: Optional[str] = None
-        
-        
-        # Watchdog State
-        self.last_heartbeat: Dict[str, float] = {}
-        self.user_sessions: Dict[str, str] = {} # user -> session_id
 
         # Reset Logic on init to ensure clean state
         self._reset_state()
@@ -413,31 +408,6 @@ class PAController:
              
         except Exception as e:
             print(f"[Controller] Chunk Error: {e}")
-
-    def update_heartbeat(self, user: str, session_id: Optional[str] = None):
-        """
-        Called by heartbeat endpoint to keep session alive.
-        Detects Session Switch (Refresh/New Tab) -> Kills old audio.
-        """
-        # Debug Log
-        # print(f"[Controller] Heartbeat Rx: User={user}, Session={session_id}")
-
-        # 1. Detect Conflict/Refresh
-        if session_id:
-            # If we knew this user, and the session ID changed...
-            if user in self.user_sessions and self.user_sessions[user] != session_id:
-                print(f"[Controller] ⚠️ NEW SESSION DETECTED for {user}")
-                print(f"   -> Old: {self.user_sessions[user]}")
-                print(f"   -> New: {session_id}")
-                print("   -> 🛑 KILLING OLD SESSION AUDIO IMMEDIATELY.")
-                # Force Stop because it's a new tab/refresh
-                self.stop_session_task(user)
-            
-            # Update Session ID
-            self.user_sessions[user] = session_id
-
-        # 2. Update Timestamp
-        self.last_heartbeat[user] = time.time()
 
     # --- INTERNAL LOGIC ---
     def _add_to_queue(self, task: Task):
@@ -784,33 +754,6 @@ class PAController:
         while self._running:
             time.sleep(1) # Tiick every 1s
             
-            # --- WATCHDOG CHECK (20s Timeout) ---
-            # Check if current task owner has timed out
-            with self._lock:
-                if self.current_task and self.current_task.data.get('user'):
-                    user = self.current_task.data.get('user')
-                    # Only check if user is in heartbeat list (ignore system/admin if not tracked?)
-                    # Ideally track everyone.
-                    if user in self.last_heartbeat:
-                        elapsed = time.time() - self.last_heartbeat[user]
-                        if elapsed > 20: # 20s Timeout
-                            print(f"[Watchdog] User '{user}' timed out ({elapsed:.1f}s). Stopping session.")
-                            # We must release lock before calling stop_session_task because it acquires lock!
-                            # Wait, stop_task acquires lock. Recursive lock? 
-                            # threading.Lock is NOT recursive. threading.RLock is.
-                            # self._lock = threading.Lock() -> We cannot call self methods that lock!
-                            # FIX: Implement internal _stop method or release/acquire.
-                            pass # We handle it below outside the lock block to avoid deadlock
-            
-            # DEADLOCK PREVENTION: Act on timeout OUTSIDE the main lock
-            # We re-check condition to be safe
-            if self.current_task and self.current_task.data.get('user'):
-                 user = self.current_task.data.get('user')
-                 if user in self.last_heartbeat:
-                      if time.time() - self.last_heartbeat[user] > 20:
-                           print(f"[Watchdog] Enforcing Stop for {user}")
-                           self.stop_session_task(user)
-
             # --- OPTIMIZATION: PERIODIC CLEANUP (Every 24 Hours) ---
             if (datetime.now() - self.last_cleanup).total_seconds() > 86400:
                 self._cleanup_old_data()

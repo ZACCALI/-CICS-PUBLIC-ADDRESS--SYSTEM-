@@ -18,8 +18,7 @@ export const AppProvider = ({ children }) => {
   const authTokenRef = useRef(null); // Track token for dead-man switch
 
   useEffect(() => {
-     // Use onIdTokenChanged to handle token refreshes automatically
-     const unsubAuth = auth.onIdTokenChanged(async (user) => {
+     const unsubAuth = auth.onAuthStateChanged(async (user) => {
          setCurrentUser(user);
          if (user) {
              const token = await user.getIdToken();
@@ -30,31 +29,6 @@ export const AppProvider = ({ children }) => {
      });
      return () => unsubAuth();
   }, []);
-
-    // Generate Unique Session ID for this tab load
-    const sessionIdRef = useRef('session-' + Math.random().toString(36).substr(2, 9));
-
-    // Watchdog Heartbeat (5s Interval)
-    useEffect(() => {
-        if (!currentUser) return;
-
-        const sendHeartbeat = async () => {
-            try {
-                // Send Token AND Session ID
-                const sid = sessionIdRef.current;
-                await api.post(`/realtime/heartbeat?user=${encodeURIComponent(currentUser.displayName || 'Admin')}&session_id=${sid}`);
-            } catch (e) {
-                // changes
-                console.warn("Heartbeat failed", e);
-            }
-        };
-
-        // Initial beat
-        sendHeartbeat();
-        
-        const interval = setInterval(sendHeartbeat, 5000); // 5s Interval
-        return () => clearInterval(interval);
-    }, [currentUser]);
 
   useEffect(() => {
       if (!currentUser) {
@@ -579,30 +553,16 @@ export const AppProvider = ({ children }) => {
         const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
         // Use type='voice' so we ONLY kill live microphone sessions.
         // Background music should PERSIST even if the user closes the tab (it's a system state).
-        // FIX: Construct ABSOLUTE URL manually to ensure it hits the correct backend (Pi)
-        // If api.baseURL is explicit (e.g. http://192...), use it.
-        // If it's relative (''), use window.location.origin (e.g. http://192.168.0.68:8000).
-        let base = api.defaults.baseURL || '';
-        if (!base.startsWith('http')) {
-            base = window.location.origin + base;
-        }
+        const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}`;
         
-        // Pass token in Query Param
-        const urlBg = `${base}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
-        
-        console.log("[Unload] Sending Stop Signal to:", urlBg);
-
-        // STRATEGY: REDUNDANCY
-        // 1. Try Fetch with Keepalive (Modern, supports headers if needed, but we use query)
         fetch(urlBg, { 
             method: 'POST', 
-            keepalive: true,
-        }).catch(e => console.error("Fetch Keepalive failed:", e));
-
-        // 2. Try Beacon (Fallback, extremely reliable for simple GET/POST)
-        try {
-            navigator.sendBeacon(urlBg);
-        } catch (e) { console.error("Beacon failed", e); }
+            keepalive: true, 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            } 
+        });
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);

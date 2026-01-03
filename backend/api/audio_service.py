@@ -6,7 +6,6 @@ import uuid
 import time
 import logging
 import json
-import signal
 from pathlib import Path
 
 # Configure logging
@@ -639,14 +638,8 @@ class AudioService:
 
     def stop(self):
         with self._lock:
-            # 1. Stop Legacy Thread/Process
             if self.current_process:
-                try: 
-                    if self.os_type != "Windows":
-                        # Kill Process Group (Parent + Children like sox/play)
-                        os.killpg(os.getpgid(self.current_process.pid), signal.SIGKILL)
-                    else:
-                        self.current_process.terminate()
+                try: self.current_process.terminate()
                 except: pass
                 self.current_process = None
             
@@ -654,30 +647,22 @@ class AudioService:
             self._siren_stop_event.set()
             self._siren_active = False
             
-            # 2. Stop Threaded Processes (Multizone)
+            # 1. Direct Process Termination
             with self.proc_lock:
                 for proc in self.active_processes:
                     try:
                         print(f"[AudioService] Terminating process {proc.pid}")
-                        if self.os_type != "Windows":
-                            # Kill Group to ensure 'play' and 'sox' die
-                            try:
-                                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                            except:
-                                proc.kill()
-                        else:
-                            proc.terminate()
-                            try: proc.wait(timeout=0.2)
-                            except: proc.kill()
+                        proc.terminate()
+                        # Wait briefly for termination
+                        try: proc.wait(timeout=0.2)
+                        except: proc.kill()
                     except: pass
                 self.active_processes.clear()
 
-            # 3. Aggressive Linux Cleanup
+            # 2. Linux Fallback: killall aplay? A bit aggressive but effective for "Stop" button.
             if self.os_type != "Windows":
-                # Force Kill All Audio Types
-                os.system("killall -9 -q aplay")
-                os.system("killall -9 -q play")
-                os.system("killall -9 -q sox")
+                os.system("killall -q aplay")
+                os.system("killall -q play")
             
             self.stop_streaming()
 

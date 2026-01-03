@@ -99,31 +99,10 @@ def stop_broadcast(user: str, type: str = "voice", task_id: Optional[str] = None
     return {"message": "Broadcast Stopped"}
 
 @real_time_announcements_router.post("/stop-session")
-def stop_session_audio(user: str, token: Optional[str] = None, authorization: Optional[str] = Header(None)):
+def stop_session_audio(user: str, user_token: dict = Depends(verify_token)):
     """
-    Stops current audio if it's NOT a schedule. Called on logout/unload.
-    Accepts token via Header (Fetch) or Query Param (Beacon).
+    Stops current audio if it's NOT a schedule. Called on logout.
     """
-    # Manual Verification
-    verified_token = None
-    try:
-        if authorization and authorization.startswith("Bearer "):
-            id_token = authorization.split("Bearer ")[1]
-            from firebase_admin import auth
-            verified_token = auth.verify_id_token(id_token)
-        elif token:
-            from firebase_admin import auth
-            verified_token = auth.verify_id_token(token)
-    except Exception as e:
-        print(f"Stop-Session Auth Failed: {e}")
-        # We might want to allow it anyway if user matches? No, security.
-        # But for 'safety' features, maybe?
-        pass
-
-    if not verified_token:
-        print(f"[Stop-Session] Denied: Invalid Token for user {user}")
-        raise HTTPException(status_code=401, detail="Invalid Authentication")
-
     controller.stop_session_task(user)
     return {"message": "Session Audio Stopped"}
 
@@ -149,12 +128,10 @@ def seek_music(req: SeekRequest, user_token: dict = Depends(verify_token)):
     return {"message": "Seek successful"}
 
 @real_time_announcements_router.post("/heartbeat")
-def heartbeat(user: str, session_id: Optional[str] = None, user_token: dict = Depends(verify_token)):
+def heartbeat(user: str, user_token: dict = Depends(verify_token)):
     """
     Simple heartbeat to confirm connection and user presence.
-    Updates Watchdog timer AND detects Session Swaps (Refreshes).
     """
-    controller.update_heartbeat(user, session_id)
     return {"status": "ok", "user": user}
 
 @real_time_announcements_router.post("/log")
