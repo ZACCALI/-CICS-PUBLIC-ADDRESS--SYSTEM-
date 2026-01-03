@@ -6,6 +6,7 @@ import uuid
 import time
 import logging
 import json
+import signal
 from pathlib import Path
 
 # Configure logging
