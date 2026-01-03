@@ -580,8 +580,9 @@ export const AppProvider = ({ children }) => {
         const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
         
         // Use sendBeacon for maximum reliability during unload
-        const blob = new Blob([JSON.stringify({ type: 'unload' })], { type: 'application/json' });
-        navigator.sendBeacon(urlBg, blob);
+        // NOTE: We send NO body (or simple string) to avoid CORS Preflight (application/json triggers preflight).
+        // The backend only needs the Query Params.
+        navigator.sendBeacon(urlBg);
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
