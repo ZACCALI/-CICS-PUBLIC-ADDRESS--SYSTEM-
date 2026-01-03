@@ -200,7 +200,12 @@ const Upload = () => {
       // Check System State
       if (systemState?.active_task) {
           const task = systemState.active_task;
-          const currentUserName = currentUser?.name || 'Admin';
+          const task = systemState.active_task;
+          
+          // Wait for user load to avoid "Admin" mismatch
+          if (!currentUser) return; 
+
+          const currentUserName = currentUser.name || currentUser.displayName || currentUser.email || 'Admin';
           const isMyUser = task.data?.user === currentUserName;
           
           if (task.type === 'BACKGROUND' || task.priority === 10) {
@@ -237,7 +242,7 @@ const Upload = () => {
                // Optional: audioRef.current.pause(); 
           }
       }
-  }, [systemState, emergencyActive, playingId, currentUser]);
+  }, [systemState, files, currentUser]);
 
   // Main Play Function
   const playSound = async (id) => {
