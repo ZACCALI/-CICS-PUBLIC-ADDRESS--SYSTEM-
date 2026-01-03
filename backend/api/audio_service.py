@@ -581,7 +581,6 @@ class AudioService:
 
     def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""
-        print(f"[AudioService] Play Background: {file_path} (Exists: {os.path.exists(file_path)})")
         self.stop()
         targets = self._get_target_cards(zones)
         

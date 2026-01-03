@@ -16,7 +16,6 @@ class BroadcastRequest(BaseModel):
     type: str = "voice" # 'voice' or 'text'
     content: Optional[str] = None # Text content or encoded metadata
     voice: Optional[str] = None # 'female' or 'male'
-    request_id: Optional[str] = None # Deduplication ID
 
 class BroadcastAction(BaseModel):
     user: str
@@ -53,8 +52,7 @@ def start_broadcast(req: BroadcastRequest, user_token: dict = Depends(verify_tok
             "user": req.user,
             "zones": req.zones,
             "content": req.content,
-            "voice": req.voice,
-            "request_id": req.request_id
+            "voice": req.voice
         }
     )
     

@@ -248,8 +248,6 @@ const RealTime = () => {
     
     try {
         // 1. Start Backend Session (Locks system, Plays Intro on Pi)
-        // Pass request_id via valid plumbing or update context?
-        // Let's assume context passes args. Checking Context first is safer.
         const success = await startBroadcast(currentUser?.name || 'Admin', zones);
         
         if (success) {
@@ -366,8 +364,7 @@ const RealTime = () => {
              zones: activeZonesList,
              type: 'text',
              content: textMessage,
-             voice: selectedVoice,
-             request_id: Date.now().toString()
+             voice: selectedVoice
         });
 
         // Log to Global History
