@@ -754,12 +754,14 @@ class PAController:
         except Exception as e:
             print(f"[Controller] DB Error: {e}")
 
-        self.last_heartbeats: Dict[str, datetime] = {} # User -> Timestamp
+        self.last_heartbeats: Dict[str, dict] = {} # User -> {timestamp, token}
 
-    def register_heartbeat(self, user: str):
+    def register_heartbeat(self, user: str, token: str = None):
         with self._lock:
-            self.last_heartbeats[user] = datetime.now()
-            # print(f"[Controller] Heartbeat registered for: {user}")
+            self.last_heartbeats[user] = {
+                'time': datetime.now(),
+                'token': token
+            }
 
     # --- SCHEDULER LOOP ---
     def _scheduler_loop(self):
@@ -770,17 +772,29 @@ class PAController:
             if self.current_task and self.current_task.type in [TaskType.BACKGROUND, TaskType.VOICE]:
                # Only monitor Background/Voice tasks (Schedules run on their own)
                owner = self.current_task.data.get('user')
+               task_token = self.current_task.data.get('session_token') # Token of the creator
+
                if owner and owner != 'System':
-                   last_beat = self.last_heartbeats.get(owner)
-                   if last_beat:
+                   hb_data = self.last_heartbeats.get(owner)
+                   if hb_data:
+                       last_beat = hb_data['time']
+                       last_token = hb_data.get('token')
+                       
+                       # 1. TIMEOUT CHECK
                        seconds_since = (datetime.now() - last_beat).total_seconds()
                        if seconds_since > 15: # 15s Timeout
                            print(f"[Controller] Heartbeat Lost for {owner} ({seconds_since}s ago). Stopping session.")
-                           # Force Stop from System
                            self.stop_session_task(owner)
-                   # Note: If no heartbeat ever registered, we assume they are legacy/local? 
-                   # Or we enforce it? Let's assume strict:
-                   elif self.current_task.type == TaskType.BACKGROUND: # Only enforce for Music for now to play safe
+                       
+                       # 2. SESSION MISMATCH CHECK (The Fix for Refresh)
+                       # If task has a specific token, and the heartbeat comes from a NEW token -> Kill Old Task
+                       # (Only if task_token is set, to avoid killing legacy sessions aggressively? Actually, we want aggressive)
+                       elif task_token and last_token and task_token != last_token:
+                           print(f"[Controller] Session Token Mismatch for {owner}. Old: {task_token}, New: {last_token}. Killing zombie task.")
+                           self.stop_session_task(owner)
+
+                   # 3. STRICT MODE (No Heartbeat Ever)
+                   elif self.current_task.type == TaskType.BACKGROUND: 
                         # If just started, give grace period? 
                         created_ago = (datetime.now() - self.current_task.created_at).total_seconds()
                         if created_ago > 25: 

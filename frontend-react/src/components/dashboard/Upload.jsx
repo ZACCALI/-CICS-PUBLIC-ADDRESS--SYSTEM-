@@ -334,13 +334,15 @@ const Upload = () => {
                  // Calculate active zones
                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
+                 const { sessionToken } = useApp(); // Get token
 
                  await api.post('/realtime/start', {
                      user: currentUser?.name || 'Admin',
                      zones: targetZones, 
                      type: 'background',
                      content: fileToPlay.name,
-                     start_time: 0
+                     start_time: 0,
+                     session_token: sessionToken
                  });
                  
                  await audioRef.current.play();

@@ -16,6 +16,9 @@ export const AppProvider = ({ children }) => {
   // Auth User for specific subscriptions
   const [currentUser, setCurrentUser] = useState(null);
   const authTokenRef = useRef(null); // Track token for dead-man switch
+  
+  // SESSION TOKEN: Unique ID for this browser tab instance (Refresh = New ID)
+  const sessionTokenRef = useRef(crypto.randomUUID());
 
   useEffect(() => {
      const unsubAuth = auth.onAuthStateChanged(async (user) => {
@@ -731,7 +734,9 @@ export const AppProvider = ({ children }) => {
     api.post(`/realtime/heartbeat?user=${encodeURIComponent(username)}`).catch(() => {});
 
     const interval = setInterval(() => {
-         api.post(`/realtime/heartbeat?user=${encodeURIComponent(username)}`)
+         api.post(`/realtime/heartbeat?user=${encodeURIComponent(username)}`, {
+                      session_token: sessionTokenRef.current
+                  })
             .catch(e => console.warn("Hb fail", e)); 
     }, 5000); // Every 5s
     
@@ -746,6 +751,7 @@ export const AppProvider = ({ children }) => {
       notifications,
       markAllAsRead, 
       clearAllNotifications,
+      sessionToken: sessionTokenRef.current,
       files,
       addFile,
       deleteFile,

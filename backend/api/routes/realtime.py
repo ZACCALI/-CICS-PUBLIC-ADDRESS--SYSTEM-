@@ -16,6 +16,16 @@ class BroadcastRequest(BaseModel):
     type: str = "voice" # 'voice' or 'text'
     content: Optional[str] = None # Text content or encoded metadata
     voice: Optional[str] = None # 'female' or 'male'
+    session_token: Optional[str] = None # NEW: Session Tracking
+
+# ... inside start_broadcast ...
+        data={
+            "user": req.user,
+            "zones": req.zones,
+            "content": req.content,
+            "voice": req.voice,
+            "session_token": req.session_token
+        }
 
 class BroadcastAction(BaseModel):
     user: str
@@ -28,13 +38,17 @@ class SeekRequest(BaseModel):
     user: str
     time: float
 
+class HeartbeatRequest(BaseModel):
+    session_token: Optional[str] = None
+
 @real_time_announcements_router.post("/heartbeat")
-def heartbeat(user: str, user_token: dict = Depends(verify_token)):
+def heartbeat(user: str, req: HeartbeatRequest = None, user_token: dict = Depends(verify_token)):
     """
     Called periodically by frontend to confirm 'User Presence'.
     If missing for >15s, controller auto-stops active session music.
     """
-    controller.register_heartbeat(user)
+    token = req.session_token if req else None
+    controller.register_heartbeat(user, token)
     return {"status": "alive"}
 
 @real_time_announcements_router.post("/start")
