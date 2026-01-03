@@ -680,10 +680,11 @@ class AudioService:
         if self.os_type == "Linux":
              # Ensure no zombie libsox/mpg123 processes
              try:
-                 subprocess.run(["pkill", "-9", "-f", "sox"], capture_output=True)
-                 subprocess.run(["pkill", "-9", "-f", "play"], capture_output=True)
+                 # Only kill mpg123 and sox, avoid generic 'play' which might match system services
                  subprocess.run(["pkill", "-9", "-f", "mpg123"], capture_output=True)
-                 subprocess.run(["pkill", "-9", "-f", "aplay"], capture_output=True)
+                 subprocess.run(["pkill", "-9", "-f", "sox"], capture_output=True)
+                 # subprocess.run(["pkill", "-9", "-f", "play"], capture_output=True) # Too aggressive?
+                 # subprocess.run(["pkill", "-9", "-f", "aplay"], capture_output=True)
              except: pass
 
     def stop(self):
