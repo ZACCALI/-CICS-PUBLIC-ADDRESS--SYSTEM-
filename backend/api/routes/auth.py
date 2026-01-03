@@ -5,25 +5,40 @@ from api.notification_service import notification_service
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
-async def verify_token(authorization: str = Header(...)):
+from fastapi import Query
+# ... imports
+
+async def verify_token(
+    authorization: str = Header(None), 
+    token: str = Query(None)
+):
     """
-    Verifies the Firebase ID token passed in the Authorization header.
-    Returns the decoded token if valid.
+    Verifies Firebase ID token.
+    Accepts 'Authorization: Bearer <token>' HEADER 
+    OR '?token=<token>' QUERY PARAM (for Beacons).
     """
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
+    id_token = None
+    
+    # 1. Check Header
+    if authorization and authorization.startswith("Bearer "):
+        id_token = authorization.split("Bearer ")[1]
+    
+    # 2. Check Query Param (Fallback)
+    if not id_token and token:
+        id_token = token
+        
+    if not id_token:
+         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
+            detail="Missing authentication credentials",
         )
     
-    token = authorization.split("Bearer ")[1]
-    
     try:
-        # Allow 60 seconds of clock skew to prevent "Token used too early" errors
-        decoded_token = auth.verify_id_token(token, clock_skew_seconds=60)
+        # Allow 60 seconds of clock skew
+        decoded_token = auth.verify_id_token(id_token, clock_skew_seconds=60)
         return decoded_token
     except Exception as e:
-        print(f"Error verifying token: {e}") # Debug logging
+        print(f"Error verifying token: {e}") 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {str(e)}",

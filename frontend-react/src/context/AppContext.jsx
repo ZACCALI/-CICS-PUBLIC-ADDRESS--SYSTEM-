@@ -554,18 +554,25 @@ export const AppProvider = ({ children }) => {
         // Use type='voice' so we ONLY kill live microphone sessions.
         // Background music should PERSIST even if the user closes the tab (it's a system state).
         
+        const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
+        
         // FIX: Handle empty string baseURL (relative) correctly. Don't use || operator on it.
         const baseUrl = api.defaults.baseURL === undefined ? 'http://localhost:8000' : api.defaults.baseURL;
-        const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}`;
         
-        fetch(urlBg, { 
-            method: 'POST', 
-            keepalive: true, 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            } 
-        });
+        // Pass token in Query Param so verify_token can read it (Beacon doesn't support Headers)
+        const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
+        
+        // Use sendBeacon - much more reliable for 'unload' than fetch
+        const blob = new Blob([JSON.stringify({ reason: "unload" })], { type: 'application/json' });
+        const success = navigator.sendBeacon(urlBg, blob);
+        
+        if (!success) {
+            // Fallback to fetch if beacon fails (e.g. data too large, though unlikely here)
+             fetch(urlBg, { 
+                method: 'POST', 
+                keepalive: true
+            });
+        }
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
