@@ -247,9 +247,16 @@ const Upload = () => {
                   
                   // Calculate active zones
                   const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-                  // If no zones selected (and not All Zones), default to All Zones to ensure playback? 
-                  // Or respect silence? Let's default to All Zones if nothing selected to avoid confusion.
-                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
+                  
+                  // NEW: Enforce Zone Selection
+                  if (activeZonesKey.length === 0) {
+                      setErrorMessage("Please select at least one zone to play audio.");
+                      setShowErrorModal(true);
+                      isProcessing.current = false;
+                      return;
+                  }
+
+                  const targetZones = activeZonesKey;
 
                   await api.post('/realtime/start', {
                       user: currentUser?.name || 'Admin',
@@ -284,16 +291,23 @@ const Upload = () => {
              audioRef.current.src = fullUrl;
              
              try {
+                 
+                 // NEW: Enforce Zone Selection
+                 const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+                 if (activeZonesKey.length === 0) {
+                      setErrorMessage("Please select at least one zone to play audio.");
+                      setShowErrorModal(true);
+                      isProcessing.current = false;
+                      return;
+                 }
+                 const targetZones = activeZonesKey;
+
                  setPlayingId(id);
                  startTimeRef.current = Date.now();
                  isManuallyPaused.current = false;
                  setCurrentTime(0);
 
                  // Tell backend to start FRESH
-                 // Calculate active zones
-                 const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-                 const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
-
                  await api.post('/realtime/start', {
                      user: currentUser?.name || 'Admin',
                      zones: targetZones, 
