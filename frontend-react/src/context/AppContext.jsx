@@ -553,7 +553,10 @@ export const AppProvider = ({ children }) => {
         const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
         // Use type='voice' so we ONLY kill live microphone sessions.
         // Background music should PERSIST even if the user closes the tab (it's a system state).
-        const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}`;
+        
+        // FIX: Handle empty string baseURL (relative) correctly. Don't use || operator on it.
+        const baseUrl = api.defaults.baseURL === undefined ? 'http://localhost:8000' : api.defaults.baseURL;
+        const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}`;
         
         fetch(urlBg, { 
             method: 'POST', 

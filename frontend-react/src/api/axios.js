@@ -7,7 +7,10 @@ import { auth } from '../firebase';
 // - If we are in Production (built app served by Backend), use relative path '/' to hit the same device.
 const getBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
-  if (import.meta.env.MODE === 'development') return 'http://localhost:8000';
+  // If dev, assume backend is on port 8000 on SAME HOST as frontend (e.g. 192.168.x.x)
+  if (import.meta.env.MODE === 'development') {
+      return `http://${window.location.hostname}:8000`;
+  }
   return ''; // Relative path (Same Origin)
 };
 
