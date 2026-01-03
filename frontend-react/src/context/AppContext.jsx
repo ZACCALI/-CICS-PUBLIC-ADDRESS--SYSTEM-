@@ -574,15 +574,30 @@ export const AppProvider = ({ children }) => {
         const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
         // Use type='voice' so we ONLY kill live microphone sessions.
         // Background music should PERSIST even if the user closes the tab (it's a system state).
-        // FIX: Use relative path (empty string fallback) so it works on Pi (accessed via IP), not Localhost.
-        const baseUrl = api.defaults.baseURL || ''; 
-        // Pass token in Query Param because Beacon cannot set Headers
-        const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
+        // FIX: Construct ABSOLUTE URL manually to ensure it hits the correct backend (Pi)
+        // If api.baseURL is explicit (e.g. http://192...), use it.
+        // If it's relative (''), use window.location.origin (e.g. http://192.168.0.68:8000).
+        let base = api.defaults.baseURL || '';
+        if (!base.startsWith('http')) {
+            base = window.location.origin + base;
+        }
         
-        // Use sendBeacon for maximum reliability during unload
-        // NOTE: We send NO body (or simple string) to avoid CORS Preflight (application/json triggers preflight).
-        // The backend only needs the Query Params.
-        navigator.sendBeacon(urlBg);
+        // Pass token in Query Param
+        const urlBg = `${base}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
+        
+        console.log("[Unload] Sending Stop Signal to:", urlBg);
+
+        // STRATEGY: REDUNDANCY
+        // 1. Try Fetch with Keepalive (Modern, supports headers if needed, but we use query)
+        fetch(urlBg, { 
+            method: 'POST', 
+            keepalive: true,
+        }).catch(e => console.error("Fetch Keepalive failed:", e));
+
+        // 2. Try Beacon (Fallback, extremely reliable for simple GET/POST)
+        try {
+            navigator.sendBeacon(urlBg);
+        } catch (e) { console.error("Beacon failed", e); }
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
