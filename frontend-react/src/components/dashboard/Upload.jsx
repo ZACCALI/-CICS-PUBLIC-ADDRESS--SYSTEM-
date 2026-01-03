@@ -235,6 +235,20 @@ const Upload = () => {
           return;
       }
 
+      // NEW: Enforce Zone Selection (Early Check)
+      // Check zones unless we are actively playing this track and just want to PAUSE.
+      const isPausing = (playingId === id && audioRef.current && !audioRef.current.paused);
+      
+      if (!isPausing) {
+          const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+          if (activeZonesKey.length === 0) {
+              setErrorMessage("Please select at least one zone to play audio.");
+              setShowErrorModal(true);
+              isProcessing.current = false;
+              return;
+          }
+      }
+
       if (playingId === id) {
           // Toggle Pause/Play
           if (audioRef.current.paused) {
@@ -247,15 +261,6 @@ const Upload = () => {
                   
                   // Calculate active zones
                   const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-                  
-                  // NEW: Enforce Zone Selection
-                  if (activeZonesKey.length === 0) {
-                      setErrorMessage("Please select at least one zone to play audio.");
-                      setShowErrorModal(true);
-                      isProcessing.current = false;
-                      return;
-                  }
-
                   const targetZones = activeZonesKey;
 
                   await api.post('/realtime/start', {
@@ -287,19 +292,13 @@ const Upload = () => {
           // New: Use 'url' from backend (Static File)
           if (fileToPlay.url) {
              const fullUrl = `${api.defaults.baseURL}${fileToPlay.url}`;
+             
+             // Now safe to log and set src since we passed zone check
              console.log("Playing from URL:", fullUrl);
              audioRef.current.src = fullUrl;
              
              try {
-                 
-                 // NEW: Enforce Zone Selection
                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-                 if (activeZonesKey.length === 0) {
-                      setErrorMessage("Please select at least one zone to play audio.");
-                      setShowErrorModal(true);
-                      isProcessing.current = false;
-                      return;
-                 }
                  const targetZones = activeZonesKey;
 
                  setPlayingId(id);
