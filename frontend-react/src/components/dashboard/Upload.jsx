@@ -7,9 +7,6 @@ import api from '../../api/axios';
 const Upload = () => {
   const { files, addFile, deleteFile, logActivity, updateLog, emergencyActive, systemState, zones, setZones } = useApp();
   const { currentUser } = useAuth();
-  
-  // Normalize User Name to match AppContext
-  const currentUserName = currentUser?.displayName || 'Admin';
   const fileInputRef = useRef(null);
   
   // Audio Player State
@@ -58,7 +55,7 @@ const Upload = () => {
 
   const stopPlayback = async () => {
       try {
-          await api.post(`/realtime/stop?user=${encodeURIComponent(currentUserName)}&type=background`);
+          await api.post(`/realtime/stop?user=${encodeURIComponent(currentUser?.name || 'Admin')}&type=background`);
       } catch (e) { /* Ignore if already stopped */ }
 
       if (audioRef.current) {
@@ -98,7 +95,7 @@ const Upload = () => {
           try {
               console.log("[Upload] Syncing Seek to Pi:", time);
               await api.post('/realtime/seek', {
-                  user: currentUserName,
+                  user: currentUser?.name || 'Admin',
                   time: time
               });
           } catch (err) {
@@ -141,92 +138,38 @@ const Upload = () => {
       };
   }, [files, playingId]); 
 
-  // HEARTBEAT LOGIC: Keep backend task alive
-  // CRITICAL FIX: Extract values so effect doesn't re-run on every systemState update
-  const activeTaskId = systemState?.active_task?.id;
-  const activeTaskUser = systemState?.active_task?.data?.user;
-  const activeTaskType = systemState?.active_task?.type?.toLowerCase();
-
-  useEffect(() => {
-      // Only proceed if playing and we have an active task
-      if (!isPlaying || !playingId || !activeTaskId) return;
-      
-      // Only send heartbeat if WE are the owner and it is BACKGROUND music
-      if (activeTaskType === 'background' && activeTaskUser === currentUserName) {
-          console.log("[Heartbeat] Starting Heartbeat Loop for Task:", activeTaskId);
-          
-          // Send IMMEDIATE Heartbeat to prevent initial gap
-          api.post('/realtime/heartbeat', { user: currentUserName, task_id: activeTaskId }).catch(() => {});
-
-          const interval = setInterval(() => {
-              // Send heartbeat
-              // console.log("[Heartbeat] Bump ->"); 
-              api.post('/realtime/heartbeat', {
-                  user: currentUserName,
-                  task_id: activeTaskId
-              }).catch(e => console.warn("Heartbeat failed", e)); 
-          }, 5000); 
-          
-          return () => {
-              console.log("[Heartbeat] Stopping Loop");
-              clearInterval(interval);
-          };
-      }
-  }, [isPlaying, playingId, activeTaskId, activeTaskUser, currentUserName, activeTaskType]);
-
   // RESUME LOGIC (Watch System State)
   // SYNC STATE ON LOAD/REFRESH
   useEffect(() => {
-      // 1. Initial Load Check
-      if (!systemState?.active_task) {
-          // If system went Idle but we think we are playing, RESET
-          if (playingId && isPlaying) {
-             setPlayingId(null);
-             setIsPlaying(false);
-             if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
-          }
-          return;
-      }
+      if (!systemState?.active_task) return;
 
       const task = systemState.active_task;
-      const type = task.type?.toLowerCase();
-
-      // If It's Background Music
-      if (type === 'background') {
-          // Identify the file
-          const contentName = task.data?.content; // "SongName.mp3"
-          let filename = contentName;
+      // If we are fresh (no playingId) but system says Music is Playing
+      if (!playingId && task.type === 'BACKGROUND') {
+          console.log("[State Sync] Found active background task:", task);
           
-          if (!filename && task.data?.file) {
-               // Fallback to path parsing
-               filename = task.data.file.split(/[/\\]/).pop();
-          }
-
-          console.log(`[State Sync] System Playing: ${filename} (Local: ${playingId})`);
+          // 1. Find the file ID from the task data
+          // task.data.file might be the filename or full path. We need to match it to our 'files' list.
+          // The backend stores 'file': 'path/to/song.mp3'. Our 'files' list has 'id' (filename) and 'url'.
+          const filename = task.data?.file ? task.data.file.split(/[/\\]/).pop() : null;
           
           if (filename) {
-              const fileMatch = files.find(f => f.name === filename || f.id === filename || (f.url && f.url.includes(filename)));
-              
+              const fileMatch = files.find(f => f.name === filename || f.id === filename);
               if (fileMatch) {
-                  // Only update if different
-                  if (playingId !== fileMatch.id) {
-                      console.log("[State Sync] Restoring Player UI for:", fileMatch.name);
-                      setPlayingId(fileMatch.id);
-                      setIsPlaying(true); 
-                      
-                      // Restore Audio Element for Seek UI
-                      if (audioRef.current) {
-                          audioRef.current.src = fileMatch.url;
-                          // Force Play (Muted) to sync timers
-                          audioRef.current.play().catch(() => {});
-                      }
-                  } else {
-                      // Already matching, just ensure playing
-                      if (!isPlaying) setIsPlaying(true);
+                  console.log("[State Sync] Restoring Player State for:", fileMatch.name);
+                  setPlayingId(fileMatch.id);
+                  setIsPlaying(true); 
+                  // Ideally we would sync currentTime too if backend provided it, but it doesn't yet.
+                  // For now, it will start from 0 visually, but backend is already playing.
+                  // Since audio.volume=0, it doesn't matter if we 'play' locally from 0.
+                  // BUT we want the valid seeking UI. 
+                  if (audioRef.current) {
+                      audioRef.current.src = fileMatch.url;
+                      // Don't call play() immediately to avoid double-audio glitches if using browser audio. 
+                      // But we ARE using browser audio (muted) for timing.
+                      // So we SHOULD play.
+                      audioRef.current.play().catch(e => console.error("Sync Play failed", e));
                   }
-              } else {
-                  console.warn("[State Sync] File not found in local list:", filename);
-                  // Optional: Show a "Unknown Track" state?
               }
           }
       }
@@ -245,10 +188,10 @@ const Upload = () => {
       // Check System State
       if (systemState?.active_task) {
           const task = systemState.active_task;
+          const currentUserName = currentUser?.name || 'Admin';
           const isMyUser = task.data?.user === currentUserName;
-          const type = task.type?.toLowerCase(); 
           
-          if (type === 'background' || task.priority === 10) {
+          if (task.type === 'BACKGROUND' || task.priority === 10) {
               // It's Background Mode. ONLY auto-resume if NOT manually paused.
              if (isMyUser && audioRef.current.paused && !isManuallyPaused.current) {
                  console.log("[Resume Logic] System Idle -> Auto-Resuming", currentUserName);
@@ -284,15 +227,6 @@ const Upload = () => {
           return;
       }
       if (isProcessing.current) return;
-      
-      // ZONE CHECK
-      const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-      if (activeZonesKey.length === 0) {
-          setErrorMessage("Please select at least one Zone to play music.");
-          setShowErrorModal(true);
-          return;
-      }
-
       isProcessing.current = true;
       
       const fileToPlay = files.find(f => f.id === id);
@@ -318,7 +252,7 @@ const Upload = () => {
                   const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
 
                   await api.post('/realtime/start', {
-                      user: currentUserName,
+                      user: currentUser?.name || 'Admin',
                       zones: targetZones, 
                       type: 'background',
                       content: fileToPlay.name,
@@ -336,39 +270,20 @@ const Upload = () => {
               isManuallyPaused.current = true;
               audioRef.current.pause();
               try {
-                  await api.post(`/realtime/stop?user=${encodeURIComponent(currentUserName)}&type=background`);
+                  await api.post(`/realtime/stop?user=${encodeURIComponent(currentUser?.name || 'Admin')}&type=background`);
               } catch (e) {
                   console.warn("Failed to notify backend of pause", e);
               }
           }
       } else {
           // Play New
-          if (fileToPlay.url || fileToPlay.content) {
-              let playUrl = fileToPlay.url || fileToPlay.content;
-              
-              // ROBUST URL FIX:
-              // 1. If it's an absolute URL (http://...)
-              if (playUrl.startsWith('http')) {
-                  // If we are on HTTPS (Cloudflare), we MUST use relative path to avoid Mixed Content
-                  if (window.location.protocol === 'https:') {
-                       try {
-                           const urlObj = new URL(playUrl);
-                           playUrl = urlObj.pathname + urlObj.search; // Extract "/media/song.mp3"
-                       } catch (e) {
-                           console.warn("URL Parse Error, fallback to name:", e);
-                           playUrl = `/media/${encodeURIComponent(fileToPlay.name)}`;
-                       }
-                  }
-              } else {
-                  // It is relative (e.g. "media/song.mp3")
-                  // Ensure it starts with /
-                  if (!playUrl.startsWith('/')) playUrl = '/' + playUrl;
-              }
-
-              console.log("[Upload] Final Play URL:", playUrl);
-              audioRef.current.src = playUrl;
-              
-              try {
+          // New: Use 'url' from backend (Static File)
+          if (fileToPlay.url) {
+             const fullUrl = `${api.defaults.baseURL}${fileToPlay.url}`;
+             console.log("Playing from URL:", fullUrl);
+             audioRef.current.src = fullUrl;
+             
+             try {
                  setPlayingId(id);
                  startTimeRef.current = Date.now();
                  isManuallyPaused.current = false;
@@ -380,7 +295,7 @@ const Upload = () => {
                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
 
                  await api.post('/realtime/start', {
-                     user: currentUserName,
+                     user: currentUser?.name || 'Admin',
                      zones: targetZones, 
                      type: 'background',
                      content: fileToPlay.name,
@@ -392,7 +307,7 @@ const Upload = () => {
                  // Log activity
              try {
                  const newLogId = await logActivity(
-                     currentUserName,
+                     currentUser?.name || 'Admin',
                      'Music Session',
                      'Music',
                      `${fileToPlay.name} (Start: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
@@ -438,7 +353,7 @@ const Upload = () => {
           formData.append('file', file);
           
           try {
-              const res = await api.post(`/files/upload?user=${encodeURIComponent(currentUserName)}`, formData, {
+              const res = await api.post(`/files/upload?user=${encodeURIComponent(currentUser?.name || 'Admin')}`, formData, {
                   headers: { 'Content-Type': 'multipart/form-data' }
               });
               
@@ -547,7 +462,7 @@ const Upload = () => {
         )}
 
         {/* ... System Busy Alert Omitted ... */}
-        {systemState?.active_task && systemState.active_task.data?.user !== (currentUserName) && (
+        {systemState?.active_task && systemState.active_task.data?.user !== (currentUser?.name || 'Admin') && (
             <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-800 p-4 rounded shadow-sm flex items-center animate-fade-in">
                 <i className="material-icons text-2xl mr-3">lock</i>
                 <div>
@@ -711,7 +626,7 @@ const Upload = () => {
          {filteredFiles.length > 0 ? (
              <div className="space-y-2 max-h-[400px] overflow-y-auto mb-4 pr-1">
                   {filteredFiles.map((file) => {
-                      const isLocked = systemState?.active_task && systemState.active_task.data?.user !== (currentUserName);
+                      const isLocked = systemState?.active_task && systemState.active_task.data?.user !== (currentUser?.name || 'Admin');
                       return (
                       <div 
                          key={file.id} 

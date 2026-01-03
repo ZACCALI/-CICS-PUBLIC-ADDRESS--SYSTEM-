@@ -2,10 +2,7 @@ import axios from 'axios';
 import { auth } from '../firebase';
 
 const api = axios.create({
-  // AUTO-DETECT BACKEND:
-  // If we are served by the backend (Production), use relative path.
-  // We only need absolute URL for local dev (npm run dev vs python app.py)
-  baseURL: import.meta.env.DEV ? (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') : '/',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
 });
 
 // Request interceptor to add the Firebase Token to requests

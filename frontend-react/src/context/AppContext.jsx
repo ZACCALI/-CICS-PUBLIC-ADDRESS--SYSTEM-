@@ -550,37 +550,19 @@ export const AppProvider = ({ children }) => {
         const token = authTokenRef.current;
         if (!token) return;
 
-        // FIX: Ensure Username matches Upload.jsx exactly.
-        // If displayName is null/undefined, Upload.jsx uses 'Admin'. We must do the same.
-        // Old Logic: (currentUser ? currentUser.displayName : 'Admin') -> returns null if currentUser exists but has no name.
-        const userName = (currentUser && currentUser.displayName) ? currentUser.displayName : 'Admin';
-        const possibleUser = currentBroadcasterRef.current || userName;
-
-        // Use type='any' to ensure we kill whatever is running by this user (Voice OR Music)
-        let baseUrl = api.defaults.baseURL || 'http://localhost:8000';
-        if (baseUrl.startsWith('/')) {
-            baseUrl = window.location.origin + baseUrl;
-        }
-        if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+        const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
+        // Use type='voice' so we ONLY kill live microphone sessions.
+        // Background music should PERSIST even if the user closes the tab (it's a system state).
+        const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop?user=${encodeURIComponent(possibleUser)}&type=voice`;
         
-        const urlBg = `${baseUrl}/realtime/stop?user=${encodeURIComponent(possibleUser)}&type=any&token=${token}`;
-        
-        // Use sendBeacon for reliable delivery on unload
-        // sendBeacon passes data as text/plain by default if string, or blob. 
-        // Our backend expects POST with query params, so empty body is fine.
-        const blob = new Blob([], { type: 'application/json' });
-        const beaconSent = navigator.sendBeacon(urlBg, blob);
-        
-        // Fallback or Double-Tap: If Beacon fails or just to be safe, try fetch with keepalive
-        // (Some browsers implement one better than the other)
-        if (!beaconSent) {
-             console.warn("Beacon failed, trying fetch...");
-             fetch(urlBg, { 
-                 method: 'POST', 
-                 keepalive: true,
-                 headers: { 'Content-Type': 'application/json' }
-             }).catch(e => console.error("Unload fetch failed", e));
-        }
+        fetch(urlBg, { 
+            method: 'POST', 
+            keepalive: true, 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            } 
+        });
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);

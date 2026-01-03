@@ -355,58 +355,28 @@ const RealTime = () => {
     // Lock Button
     setIsSubmitting(true);
     
-    // --- SEND TEXT BROADCAST ---
+    // Send to Backend Controller (Global Sync & Priority)
+    const activeZonesList = Object.keys(zones).filter(z => zones[z]);
+
     try {
-        const zonesList = Object.keys(zones).filter(k => k !== 'All Zones' && zones[k]);
-        
-        // POST to /realtime/start (Text Type)
-        // CRITICAL FIX: The endpoint '/realtime/text' DOES NOT EXIST. Use '/start'.
         await api.post('/realtime/start', {
-            user: currentUser?.name || 'Admin',
-            zones: zonesList, // Send list of strings, backend handles mapping if needed, or map here if backend expects ints?
-                              // Looking at backend: "zones: List[str]". So strings are fine!
-            type: 'text',
-            content: textMessage,
-            voice: selectedVoice
+             user: currentUser?.name || 'Admin',
+             zones: activeZonesList,
+             type: 'text',
+             content: textMessage,
+             voice: selectedVoice
         });
 
-        // Clear input on success
+        // Log to Global History
+        logActivity(
+            currentUser?.name, 
+            'Broadcasted Text', 
+            'Text', 
+            `Message: "${textMessage}" to ${activeZonesList.filter(z => z !== 'All Zones').join(', ')}`
+        );
+        
         setTextMessage('');
         
-        // Log to Activity Log
-        try {
-             if (currentUser?.name) {
-                await api.post('/logs', {
-                    user: currentUser.name,
-                    action: 'Broadcasted Text',
-                    details: `Message: "${textMessage}"`, 
-                    timestamp: new Date().toISOString()
-                });
-             }
-        } catch (e) {
-             console.warn("Log failed but broadcast sent", e);
-        }
-
-    } catch (err) {
-
-        // Clear input on success
-        setTextMessage('');
-        
-        // Log to Activity Log
-        // Use 'api' here too for consistency
-        try {
-             if (currentUser?.name) {
-                await api.post('/logs', {
-                    user: currentUser.name,
-                    action: 'Broadcasted Text',
-                    details: `Message: "${textMessage}"`, 
-                    timestamp: new Date().toISOString()
-                });
-             }
-        } catch (e) {
-             console.warn("Log failed but broadcast sent", e);
-        }
-
     } catch (err) {
         console.error("Text Broadcast Failed", err);
         setModalMessage(
