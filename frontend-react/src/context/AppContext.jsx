@@ -556,8 +556,19 @@ export const AppProvider = ({ children }) => {
         // Background music should PERSIST even if the user closes the tab (it's a system state).
         
         // FIX: Handle empty string baseURL (relative) correctly. Don't use || operator on it.
-        const baseUrl = api.defaults.baseURL === undefined ? 'http://localhost:8000' : api.defaults.baseURL;
+        let baseUrl = api.defaults.baseURL;
         
+        // 1. If baseUrl is explicitly empty or relative, resolve it against current location
+        // to Ensure we don't accidentally hit localhost if we are strictly on IP.
+        if (!baseUrl || baseUrl.startsWith('/')) {
+             // If we are serving from backend (production), origin is correct.
+             // If we are in dev, axios usually sets absolute. 
+             // BUT just in case axios failed or config is weird:
+             baseUrl = `${window.location.protocol}//${window.location.hostname}:8000`;
+             // Note: This forcibly assumes backend is on 8000. 
+             // If user changed backend port, this breaks, but 8000 is standard for this project.
+        }
+
         // Pass token in Query Param so verify_token can read it (Beacon doesn't support Headers)
         const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
         
