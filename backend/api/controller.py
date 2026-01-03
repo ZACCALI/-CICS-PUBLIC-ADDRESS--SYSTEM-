@@ -248,6 +248,12 @@ class PAController:
                 print(f"[Controller] Logout: Keeping Schedule {self.current_task.id} active.")
                 return
 
+            # CHECK OWNERSHIP: Only the user who started the task (or System/Admin) can stop/pause it via session end.
+            task_owner = self.current_task.data.get('user')
+            if task_owner and task_owner != user and user not in ['System', 'Admin']:
+                print(f"[Controller] Logout Ignore: User '{user}' cannot stop task owned by '{task_owner}'.")
+                return
+
             # NEW: If Background Music, PAUSE it (Don't Kill) so user can resume on reload
             if self.current_task.type == TaskType.BACKGROUND:
                 print(f"[Controller] Logout: PAUSING Background Music (Persistence Mode)")
