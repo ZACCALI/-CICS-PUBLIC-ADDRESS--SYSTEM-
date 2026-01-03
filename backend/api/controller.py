@@ -92,6 +92,7 @@ class PAController:
         self.background_resume_time = 0
         self.background_play_start: Optional[datetime] = None
         self.last_background_content: Optional[str] = None
+        self.last_request_id = None
 
         # Reset Logic on init to ensure clean state
         self._reset_state()
@@ -170,7 +171,14 @@ class PAController:
         with self._lock:  # Critical Section
             print(f"[Controller] Request: {new_task.type} (Pri: {new_task.priority})")
 
-            # 1. Emergency Check (Invincible)
+            # 1. Deduplication
+            req_id = new_task.data.get('request_id')
+            if req_id and req_id == self.last_request_id:
+                 print(f"[Controller] Ignoring duplicate request: {req_id}")
+                 return True 
+            if req_id: self.last_request_id = req_id
+
+            # 2. Emergency Check (Invincible)
             if self.emergency_mode and new_task.priority < Priority.EMERGENCY:
                 print(f"[Controller] Denied: Emergency Active")
                 return False
