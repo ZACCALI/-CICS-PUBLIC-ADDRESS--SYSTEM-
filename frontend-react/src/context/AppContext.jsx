@@ -561,8 +561,10 @@ export const AppProvider = ({ children }) => {
         // Pass token in Query Param so verify_token can read it (Beacon doesn't support Headers)
         const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
         
-        // Use sendBeacon - much more reliable for 'unload' than fetch.
-        // USE text/plain to avoid CORS Preflight (OPTIONS) check which fails on unload.
+        // Use sendBeacon - much more reliable for 'unload' than fetch
+        // CORS NOTE: fail on preflight (OPTIONS) if Content-Type is application/json during unload.
+        // We use text/plain to make it a "Simple Request" (No Preflight). 
+        // Backend ignores the body anyway.
         const blob = new Blob(["unload"], { type: 'text/plain' });
         const success = navigator.sendBeacon(urlBg, blob);
         
@@ -570,7 +572,9 @@ export const AppProvider = ({ children }) => {
             // Fallback to fetch if beacon fails (e.g. data too large, though unlikely here)
              fetch(urlBg, { 
                 method: 'POST', 
-                keepalive: true
+                keepalive: true,
+                body: "unload",
+                headers: { 'Content-Type': 'text/plain' }
             });
         }
     };
