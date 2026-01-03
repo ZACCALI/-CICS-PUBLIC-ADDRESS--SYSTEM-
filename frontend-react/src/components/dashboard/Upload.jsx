@@ -5,7 +5,7 @@ import Modal from '../common/Modal';
 import api from '../../api/axios';
 
 const Upload = () => {
-  const { files, addFile, deleteFile, logActivity, updateLog, emergencyActive, systemState, zones, setZones } = useApp();
+  const { files, addFile, deleteFile, logActivity, updateLog, emergencyActive, systemState, zones, setZones, sessionToken } = useApp(); // Expose sessionToken here
   const { currentUser } = useAuth();
   const fileInputRef = useRef(null);
   
@@ -334,7 +334,7 @@ const Upload = () => {
                  // Calculate active zones
                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
-                 const { sessionToken } = useApp(); // Get token
+                 // sessionToken is now from top-level scope
 
                  await api.post('/realtime/start', {
                      user: currentUser?.name || 'Admin',
