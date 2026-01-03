@@ -343,13 +343,32 @@ const Upload = () => {
           }
       } else {
           // Play New
-          // New: Use 'url' from backend (Static File)
-          if (fileToPlay.url) {
-             const fullUrl = `${api.defaults.baseURL}${fileToPlay.url}`;
-             console.log("Playing from URL:", fullUrl);
-             audioRef.current.src = fullUrl;
-             
-             try {
+          if (fileToPlay.url || fileToPlay.content) {
+              let playUrl = fileToPlay.url || fileToPlay.content;
+              
+              // ROBUST URL FIX:
+              // 1. If it's an absolute URL (http://...)
+              if (playUrl.startsWith('http')) {
+                  // If we are on HTTPS (Cloudflare), we MUST use relative path to avoid Mixed Content
+                  if (window.location.protocol === 'https:') {
+                       try {
+                           const urlObj = new URL(playUrl);
+                           playUrl = urlObj.pathname + urlObj.search; // Extract "/media/song.mp3"
+                       } catch (e) {
+                           console.warn("URL Parse Error, fallback to name:", e);
+                           playUrl = `/media/${encodeURIComponent(fileToPlay.name)}`;
+                       }
+                  }
+              } else {
+                  // It is relative (e.g. "media/song.mp3")
+                  // Ensure it starts with /
+                  if (!playUrl.startsWith('/')) playUrl = '/' + playUrl;
+              }
+
+              console.log("[Upload] Final Play URL:", playUrl);
+              audioRef.current.src = playUrl;
+              
+              try {
                  setPlayingId(id);
                  startTimeRef.current = Date.now();
                  isManuallyPaused.current = false;

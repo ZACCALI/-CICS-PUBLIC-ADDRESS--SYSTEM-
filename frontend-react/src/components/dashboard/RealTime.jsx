@@ -359,20 +359,35 @@ const RealTime = () => {
     try {
         const zonesList = Object.keys(zones).filter(k => k !== 'All Zones' && zones[k]);
         
-        // POST to /realtime/text
-        // The API instance (from axios.js) now handles the Base URL (Relative on Cloudflare)
-        // CRITICAL FIX: Use api() instead of fetch() to ensure correct Headers/Auth/URL
-        await api.post('/realtime/text', {
-            user: currentUser?.name || 'Admin', // Ensure 'Admin' fallback
-            message: textMessage,
-            voice: selectedVoice,
-            // Maps: "Admin Office" -> 2, "Main Hall" -> 1, "Library" -> 1, "Classrooms" -> 2
-            zones: zonesList.map(z => {
-                if (z === 'Main Hall' || z === 'Library') return 1;
-                if (z === 'Admin Office' || z === 'Classrooms') return 2;
-                return 1;
-            })
+        // POST to /realtime/start (Text Type)
+        // CRITICAL FIX: The endpoint '/realtime/text' DOES NOT EXIST. Use '/start'.
+        await api.post('/realtime/start', {
+            user: currentUser?.name || 'Admin',
+            zones: zonesList, // Send list of strings, backend handles mapping if needed, or map here if backend expects ints?
+                              // Looking at backend: "zones: List[str]". So strings are fine!
+            type: 'text',
+            content: textMessage,
+            voice: selectedVoice
         });
+
+        // Clear input on success
+        setTextMessage('');
+        
+        // Log to Activity Log
+        try {
+             if (currentUser?.name) {
+                await api.post('/logs', {
+                    user: currentUser.name,
+                    action: 'Broadcasted Text',
+                    details: `Message: "${textMessage}"`, 
+                    timestamp: new Date().toISOString()
+                });
+             }
+        } catch (e) {
+             console.warn("Log failed but broadcast sent", e);
+        }
+
+    } catch (err) {
 
         // Clear input on success
         setTextMessage('');
