@@ -18,14 +18,7 @@ class BroadcastRequest(BaseModel):
     voice: Optional[str] = None # 'female' or 'male'
     session_token: Optional[str] = None # NEW: Session Tracking
 
-# ... inside start_broadcast ...
-        data={
-            "user": req.user,
-            "zones": req.zones,
-            "content": req.content,
-            "voice": req.voice,
-            "session_token": req.session_token
-        }
+    session_token: Optional[str] = None # NEW: Session Tracking
 
 class BroadcastAction(BaseModel):
     user: str
@@ -72,10 +65,11 @@ def start_broadcast(req: BroadcastRequest, user_token: dict = Depends(verify_tok
         type=task_type,
         priority=priority,
         data={
-            "user": req.user,
+             "user": req.user,
             "zones": req.zones,
             "content": req.content,
-            "voice": req.voice
+            "voice": req.voice,
+            "session_token": req.session_token # NEW: Session Tracking
         }
     )
     
