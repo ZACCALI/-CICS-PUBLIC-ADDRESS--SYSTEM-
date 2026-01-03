@@ -16,6 +16,7 @@ class BroadcastRequest(BaseModel):
     type: str = "voice" # 'voice' or 'text'
     content: Optional[str] = None # Text content or encoded metadata
     voice: Optional[str] = None # 'female' or 'male'
+    start_time: float = 0
     session_token: Optional[str] = None # NEW: Session Tracking
 
 class BroadcastAction(BaseModel):
@@ -67,6 +68,7 @@ def start_broadcast(req: BroadcastRequest, user_token: dict = Depends(verify_tok
             "zones": req.zones,
             "content": req.content,
             "voice": req.voice,
+            "start_time": req.start_time,
             "session_token": req.session_token # NEW: Session Tracking
         }
     )
