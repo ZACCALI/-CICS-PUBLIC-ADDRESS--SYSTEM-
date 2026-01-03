@@ -222,3 +222,13 @@ class AudioService:
                 subprocess.run(["pkill", "-9", "-f", "mpg123"], capture_output=True)
             except:
                 pass
+
+    def cleanup_all(self):
+        """Forcefully cleans up all audio processes on startup."""
+        self.stop()
+        # Additional cleanup if needed
+        if self.os_type == "Linux":
+             # Ensure no zombie libsox processes
+             try:
+                 subprocess.run(["pkill", "-9", "-f", "sox"], capture_output=True)
+             except: pass

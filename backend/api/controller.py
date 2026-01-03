@@ -94,6 +94,7 @@ class PAController:
         self.last_background_content: Optional[str] = None
 
         # Reset Logic on init to ensure clean state
+        audio_service.cleanup_all() # <--- KILL ZOMBIE MUSIC ON STARTUP
         self._reset_state()
         
         # Cleanup State
