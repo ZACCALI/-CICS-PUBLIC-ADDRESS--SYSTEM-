@@ -236,6 +236,25 @@ const Upload = () => {
           setShowErrorModal(true);
           return;
       }
+
+      // STRICT ZONE CHECK: Enforce zone selection allows Play/Resume
+      // Must check activeZones even if resuming
+      const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+      
+      // Allow 'pause' (stop) always, but 'play' (start/resume) requires zones?
+      // If we are pausing, we don't need zones. 
+      // Logic:
+      // If (Playing and Resume Requested) OR (Not Playing and New Request) -> Need Zones
+      // If (Playing and Pause Requested) -> No Zones needed
+      
+      const isPauseRequest = (playingId === id) && audioRef.current && !audioRef.current.paused;
+      
+      if (!isPauseRequest && activeZonesKey.length === 0) {
+          setErrorMessage("Please select at least one zone before playing.");
+          setShowErrorModal(true);
+          return;
+      }
+
       if (isProcessing.current) return;
       isProcessing.current = true;
       

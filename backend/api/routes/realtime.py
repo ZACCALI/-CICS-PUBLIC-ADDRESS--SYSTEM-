@@ -28,6 +28,15 @@ class SeekRequest(BaseModel):
     user: str
     time: float
 
+@real_time_announcements_router.post("/heartbeat")
+def heartbeat(user: str, user_token: dict = Depends(verify_token)):
+    """
+    Called periodically by frontend to confirm 'User Presence'.
+    If missing for >15s, controller auto-stops active session music.
+    """
+    controller.register_heartbeat(user)
+    return {"status": "alive"}
+
 @real_time_announcements_router.post("/start")
 def start_broadcast(req: BroadcastRequest, user_token: dict = Depends(verify_token)):
     """

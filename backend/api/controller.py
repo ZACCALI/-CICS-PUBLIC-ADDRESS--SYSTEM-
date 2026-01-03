@@ -97,7 +97,11 @@ class PAController:
         self._reset_state()
         
         # Cleanup State
+        # Cleanup State
         self.last_cleanup = datetime.now()
+        
+        # Monitor Heartbeats
+        self.last_heartbeats: Dict[str, datetime] = {}
 
         # Start Scheduler Thread
         self.scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
@@ -749,10 +753,37 @@ class PAController:
         except Exception as e:
             print(f"[Controller] DB Error: {e}")
 
+        self.last_heartbeats: Dict[str, datetime] = {} # User -> Timestamp
+
+    def register_heartbeat(self, user: str):
+        with self._lock:
+            self.last_heartbeats[user] = datetime.now()
+            # print(f"[Controller] Heartbeat registered for: {user}")
+
     # --- SCHEDULER LOOP ---
     def _scheduler_loop(self):
         while self._running:
             time.sleep(1) # Tiick every 1s
+            
+            # --- HEARTBEAT CHECK ---
+            if self.current_task and self.current_task.type in [TaskType.BACKGROUND, TaskType.VOICE]:
+               # Only monitor Background/Voice tasks (Schedules run on their own)
+               owner = self.current_task.data.get('user')
+               if owner and owner != 'System':
+                   last_beat = self.last_heartbeats.get(owner)
+                   if last_beat:
+                       seconds_since = (datetime.now() - last_beat).total_seconds()
+                       if seconds_since > 15: # 15s Timeout
+                           print(f"[Controller] Heartbeat Lost for {owner} ({seconds_since}s ago). Stopping session.")
+                           # Force Stop from System
+                           self.stop_session_task(owner)
+                   # Note: If no heartbeat ever registered, we assume they are legacy/local? 
+                   # Or we enforce it? Let's assume strict:
+                   elif self.current_task.type == TaskType.BACKGROUND: # Only enforce for Music for now to play safe
+                        # If just started, give grace period? 
+                        created_ago = (datetime.now() - self.current_task.created_at).total_seconds()
+                        if created_ago > 20: 
+                             pass # print(f"[Controller] Warning: No heartbeat for {owner} yet.")
             
             # --- OPTIMIZATION: PERIODIC CLEANUP (Every 24 Hours) ---
             if (datetime.now() - self.last_cleanup).total_seconds() > 86400:
@@ -797,6 +828,13 @@ class PAController:
                 # Preempt lower priority if needed
                 if self.current_task:
                     self._preempt_current_task(next_task.priority)
+                
+                # Start
+                # We need to call _start_task, but we are inside lock? 
+                # _start_task assumes lock is held? No, _start_task updates internal state.
+                # But request_playback calls it.
+                # Here we are in scheduler loop, we should just run it.
+                self._start_task(next_task)
 
                 self._start_task(next_task)
                 
