@@ -188,7 +188,11 @@ const Upload = () => {
               }
           }
       }
-  }, [systemState, files]); // Run when systemState or file list loads
+                  }
+              }
+          }
+      }
+  }, [systemState, files, playingId]); // Critical: Depend on files to load before syncing
 
   // EXISTING EFFECT (Modified to not conflict)
   useEffect(() => {
