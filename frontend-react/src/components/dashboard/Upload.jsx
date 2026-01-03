@@ -205,11 +205,19 @@ const Upload = () => {
           
           if (task.type === 'BACKGROUND' || task.priority === 10) {
               // It's Background Mode.
-              // REMOVED AUTO-RESUME: Default to Paused on Load/Refresh to prevent ghost playback.
-              // User must click Play manually if they return.
+              // It's Background Mode.
+              // SYNC-KILL LOGIC:
+              // If Backend says "I am playing" (active_task.user === me)
+              // But Frontend says "I am new/paused" (audioRef.paused)
+              // Then it's a "Ghost Session" kept alive by our new heartbeats.
+              // We MUST kill it to reset state.
               if (isMyUser && audioRef.current.paused) {
-                 console.log("[Resume Logic] Track is loaded. Waiting for user action.");
-                 // Do not auto-play.
+                 console.log("[Sync-Kill] Detect Orphaned Background Session -> Stopping backend.");
+                 // We can't easily call handleStop() here as it might toggle state or be unavailable scope-wise.
+                 // Safer to just hit the API directly.
+                 api.post(`/realtime/stop?user=${encodeURIComponent(currentUserName)}&type=background`)
+                    .then(() => console.log("[Sync-Kill] Sent Stop Request"))
+                    .catch(e => console.error("[Sync-Kill] Failed", e));
               }
           } else {
               // Higher priority task active (Voice/Schedule) -> PAUSE
