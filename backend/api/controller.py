@@ -455,18 +455,25 @@ class PAController:
             )
             
         elif self.current_task.type == TaskType.BACKGROUND:
-            # Soft Stop: Suspend
-            print(f"  -> [SUSPEND] Suspending Background Task {self.current_task.id} for {new_priority}")
-            
-            # Save offset correctly
-            if self.background_play_start:
-                elapsed = (datetime.now() - self.background_play_start).total_seconds()
-                self.background_resume_time += elapsed
-                print(f"  -> Saved resume offset: {self.background_resume_time}s")
-                self.background_play_start = None
+            # FIX: If we are just switching tracks (BACKGROUND -> BACKGROUND), do NOT suspend.
+            if new_priority == Priority.BACKGROUND:
+                 print(f"  -> Switching Track: {self.current_task.id} replaced by new Background Task.")
+                 self.current_task = None
+                 # Do not set suspended_task
+                 # audio_service.stop() will happen below
+            else:
+                 # Soft Stop: Suspend (Only if Higher Priority Interrupted)
+                 print(f"  -> [SUSPEND] Suspending Background Task {self.current_task.id} for {new_priority}")
+                 
+                 # Save offset correctly
+                 if self.background_play_start:
+                     elapsed = (datetime.now() - self.background_play_start).total_seconds()
+                     self.background_resume_time += elapsed
+                     print(f"  -> Saved resume offset: {self.background_resume_time}s")
+                     self.background_play_start = None
 
-            self.suspended_task = self.current_task
-            self.current_task = None
+                 self.suspended_task = self.current_task
+                 self.current_task = None
             # Do NOT mark COMPLETED. State remains valid in object.
         
         else:
