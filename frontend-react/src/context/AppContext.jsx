@@ -551,10 +551,9 @@ export const AppProvider = ({ children }) => {
         if (!token) return;
 
         const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
+        
         // Use type='voice' so we ONLY kill live microphone sessions.
         // Background music should PERSIST even if the user closes the tab (it's a system state).
-        
-        const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
         
         // FIX: Handle empty string baseURL (relative) correctly. Don't use || operator on it.
         const baseUrl = api.defaults.baseURL === undefined ? 'http://localhost:8000' : api.defaults.baseURL;
