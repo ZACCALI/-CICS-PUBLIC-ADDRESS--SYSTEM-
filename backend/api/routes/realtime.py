@@ -127,6 +127,13 @@ def seek_music(req: SeekRequest, user_token: dict = Depends(verify_token)):
         raise HTTPException(status_code=404, detail="No background music active to seek")
     return {"message": "Seek successful"}
 
+@real_time_announcements_router.post("/heartbeat")
+def heartbeat(user: str, user_token: dict = Depends(verify_token)):
+    """
+    Simple heartbeat to confirm connection and user presence.
+    """
+    return {"status": "ok", "user": user}
+
 @real_time_announcements_router.post("/log")
 def log_broadcast(action: BroadcastAction, user_token: dict = Depends(verify_token)):
     # Log history only
