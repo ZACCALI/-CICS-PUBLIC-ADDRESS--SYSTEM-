@@ -720,6 +720,23 @@ export const AppProvider = ({ children }) => {
       setNotifications([]);
   };
 
+  // HEARTBEAT for Dead Man's Switch (Auto-Stop Music on browser close/crash)
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    const username = currentUser.displayName || currentUser.email || 'Admin';
+    
+    // Initial beat
+    api.post(`/realtime/heartbeat?user=${encodeURIComponent(username)}`).catch(() => {});
+
+    const interval = setInterval(() => {
+         api.post(`/realtime/heartbeat?user=${encodeURIComponent(username)}`)
+            .catch(e => console.warn("Hb fail", e)); 
+    }, 5000); // Every 5s
+    
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   const value = {
       schedules,
       addSchedule,
