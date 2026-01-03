@@ -550,7 +550,7 @@ export const AppProvider = ({ children }) => {
         const token = authTokenRef.current;
         if (!token) return;
 
-        const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
+        const possibleUser = currentBroadcasterRef.current || (currentUser ? (currentUser.name || currentUser.displayName || currentUser.email) : 'Admin'); 
         // Use type='voice' so we ONLY kill live microphone sessions.
         // Pass token in Query Param because sendBeacon cannot send Authorization Header
         const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
@@ -724,7 +724,8 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     if (!currentUser) return;
     
-    const username = currentUser.displayName || currentUser.email || 'Admin';
+    // MATCH Upload.jsx logic: name (Firestore) -> displayName (Auth) -> email -> Admin
+    const username = currentUser.name || currentUser.displayName || currentUser.email || 'Admin';
     
     // Initial beat
     api.post(`/realtime/heartbeat?user=${encodeURIComponent(username)}`).catch(() => {});

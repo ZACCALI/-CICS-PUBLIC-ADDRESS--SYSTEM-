@@ -782,8 +782,10 @@ class PAController:
                    elif self.current_task.type == TaskType.BACKGROUND: # Only enforce for Music for now to play safe
                         # If just started, give grace period? 
                         created_ago = (datetime.now() - self.current_task.created_at).total_seconds()
-                        if created_ago > 20: 
-                             pass # print(f"[Controller] Warning: No heartbeat for {owner} yet.")
+                        if created_ago > 25: 
+                             # STRICT KILL: If user has played music for 25s and NEVER sent a heartbeat, they are likely gone/zombie.
+                             print(f"[Controller] Security: No heartbeat registered for {owner} (>25s). Killing zombie session.")
+                             self.stop_session_task(owner)
             
             # --- OPTIMIZATION: PERIODIC CLEANUP (Every 24 Hours) ---
             if (datetime.now() - self.last_cleanup).total_seconds() > 86400:
