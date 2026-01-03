@@ -16,9 +16,6 @@ export const AppProvider = ({ children }) => {
   // Auth User for specific subscriptions
   const [currentUser, setCurrentUser] = useState(null);
   const authTokenRef = useRef(null); // Track token for dead-man switch
-  
-  // SESSION TOKEN: Unique ID for this browser tab instance (Refresh = New ID)
-  const sessionTokenRef = useRef(crypto.randomUUID());
 
   useEffect(() => {
      const unsubAuth = auth.onAuthStateChanged(async (user) => {
@@ -553,17 +550,19 @@ export const AppProvider = ({ children }) => {
         const token = authTokenRef.current;
         if (!token) return;
 
-        const possibleUser = currentBroadcasterRef.current || (currentUser ? (currentUser.name || currentUser.displayName || currentUser.email) : 'Admin'); 
+        const possibleUser = currentBroadcasterRef.current || (currentUser ? currentUser.displayName : 'Admin'); 
         // Use type='voice' so we ONLY kill live microphone sessions.
-        // Pass token in Query Param because sendBeacon cannot send Authorization Header
-        const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
+        // Background music should PERSIST even if the user closes the tab (it's a system state).
+        const urlBg = `${api.defaults.baseURL || 'http://localhost:8000'}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}`;
         
-        // Use sendBeacon for reliable delivery during unload
-        const success = navigator.sendBeacon(urlBg);
-        if (!success) {
-             // Fallback
-             fetch(urlBg, { method: 'POST', keepalive: true });
-        }
+        fetch(urlBg, { 
+            method: 'POST', 
+            keepalive: true, 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            } 
+        });
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
@@ -723,26 +722,6 @@ export const AppProvider = ({ children }) => {
       setNotifications([]);
   };
 
-  // HEARTBEAT for Dead Man's Switch (Auto-Stop Music on browser close/crash)
-  useEffect(() => {
-    if (!currentUser) return;
-    
-    // MATCH Upload.jsx logic: name (Firestore) -> displayName (Auth) -> email -> Admin
-    const username = currentUser.name || currentUser.displayName || currentUser.email || 'Admin';
-    
-    // Initial beat
-    api.post(`/realtime/heartbeat?user=${encodeURIComponent(username)}`).catch(() => {});
-
-    const interval = setInterval(() => {
-         api.post(`/realtime/heartbeat?user=${encodeURIComponent(username)}`, {
-                      session_token: sessionTokenRef.current
-                  })
-            .catch(e => console.warn("Hb fail", e)); 
-    }, 5000); // Every 5s
-    
-    return () => clearInterval(interval);
-  }, [currentUser]);
-
   const value = {
       schedules,
       addSchedule,
@@ -751,7 +730,6 @@ export const AppProvider = ({ children }) => {
       notifications,
       markAllAsRead, 
       clearAllNotifications,
-      sessionToken: sessionTokenRef.current,
       files,
       addFile,
       deleteFile,

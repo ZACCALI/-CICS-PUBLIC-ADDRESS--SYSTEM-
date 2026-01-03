@@ -5,7 +5,7 @@ import Modal from '../common/Modal';
 import api from '../../api/axios';
 
 const Upload = () => {
-  const { files, addFile, deleteFile, logActivity, updateLog, emergencyActive, systemState, zones, setZones, sessionToken } = useApp(); // Expose sessionToken here
+  const { files, addFile, deleteFile, logActivity, updateLog, emergencyActive, systemState, zones, setZones } = useApp();
   const { currentUser } = useAuth();
   const fileInputRef = useRef(null);
   
@@ -134,19 +134,9 @@ const Upload = () => {
           audio.removeEventListener('play', () => setIsPlaying(true));
           audio.removeEventListener('pause', () => setIsPlaying(false));
           window.removeEventListener('stop-all-audio', handleStopGlobal);
-          // DO NOT PAUSE HERE! It stops music when file list updates (e.g. upload).
-          // Pause is handled by separate unmount effect or explicit stop.
+          audio.pause();
       };
   }, [files, playingId]); 
-
-  // Cleanup on Unmount ONLY
-  useEffect(() => {
-    return () => {
-        if (audioRef.current) {
-            audioRef.current.pause();
-        }
-    };
-  }, []); 
 
   // RESUME LOGIC (Watch System State)
   // SYNC STATE ON LOAD/REFRESH
@@ -178,9 +168,7 @@ const Upload = () => {
                       // Don't call play() immediately to avoid double-audio glitches if using browser audio. 
                       // But we ARE using browser audio (muted) for timing.
                       // So we SHOULD play.
-                      // audioRef.current.play().catch(e => console.error("Sync Play failed", e));
-                      // DISABLED AUTO-PLAY ON REFRESH.
-                      console.log("Ready to play (User Action Required)");
+                      audioRef.current.play().catch(e => console.error("Sync Play failed", e));
                   }
               }
           }
@@ -204,13 +192,13 @@ const Upload = () => {
           const isMyUser = task.data?.user === currentUserName;
           
           if (task.type === 'BACKGROUND' || task.priority === 10) {
-              // It's Background Mode.
-              // REMOVED AUTO-RESUME: Default to Paused on Load/Refresh to prevent ghost playback.
-              // User must click Play manually if they return.
-              if (isMyUser && audioRef.current.paused) {
-                 console.log("[Resume Logic] Track is loaded. Waiting for user action.");
-                 // Do not auto-play.
-              }
+              // It's Background Mode. ONLY auto-resume if NOT manually paused.
+             if (isMyUser && audioRef.current.paused && !isManuallyPaused.current) {
+                 console.log("[Resume Logic] System Idle -> Auto-Resuming", currentUserName);
+                 audioRef.current.play().catch(e => console.error("Resume failed", e));
+             } else {
+                 console.log("[Resume Logic] Stay Paused (Manual Pause Active or Not My Track)");
+             }
           } else {
               // Higher priority task active (Voice/Schedule) -> PAUSE
               if (!audioRef.current.paused) {
@@ -238,105 +226,110 @@ const Upload = () => {
           setShowErrorModal(true);
           return;
       }
-
-      // STRICT ZONE CHECK: Enforce zone selection allows Play/Resume
-      // Must check activeZones even if resuming
-      const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-      
-      // Allow 'pause' (stop) always, but 'play' (start/resume) requires zones?
-      // If we are pausing, we don't need zones. 
-      // Logic:
-      // If (Playing and Resume Requested) OR (Not Playing and New Request) -> Need Zones
-      // If (Playing and Pause Requested) -> No Zones needed
-      
-      const isPauseRequest = (playingId === id) && audioRef.current && !audioRef.current.paused;
-      
-      if (!isPauseRequest && activeZonesKey.length === 0) {
-          setErrorMessage("Please select at least one zone before playing.");
-          setShowErrorModal(true);
-          return;
-      }
-
       if (isProcessing.current) return;
       isProcessing.current = true;
       
-      try {
-          // ... (Existing Logic) ...
-          const fileToPlay = files.find(f => f.id === id);
-          if (!fileToPlay) return;
+      const fileToPlay = files.find(f => f.id === id);
+      if (!fileToPlay) {
+          isProcessing.current = false;
+          return;
+      }
 
-          // ... Zone Checks ...
-          if (activeZonesKey.length === 0 && playingId !== id) {
-             setErrorMessage("Please select at least one zone before playing.");
-             setShowErrorModal(true);
-             return;
-          }
+      if (playingId === id) {
+          // Toggle Pause/Play
+          if (audioRef.current.paused) {
+              console.log("[Upload] Manual Play Triggered");
+              isManuallyPaused.current = false;
+              try {
+                  // Explicitly tell backend to start (with current offset if any)
+                  const currentSecs = audioRef.current.currentTime || 0;
+                  console.log(`[Upload] Starting on Pi at ${currentSecs}s`);
+                  
+                  // Calculate active zones
+                  const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+                  // If no zones selected (and not All Zones), default to All Zones to ensure playback? 
+                  // Or respect silence? Let's default to All Zones if nothing selected to avoid confusion.
+                  const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
 
-          if (playingId === id) {
-              // ... Toggle Logic ...
-              if (audioRef.current.paused) {
-                  // ... Play ...
-                   try {
-                       // Explicitly tell backend to start (with current offset if any)
-                       const currentSecs = audioRef.current.currentTime || 0;
-                       console.log(`[Upload] Starting on Pi at ${currentSecs}s`);
-                       
-                       // Calculate active zones
-                       const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-                       const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
-
-                       await api.post('/realtime/start', {
-                           user: currentUser?.name || 'Admin',
-                           zones: targetZones, 
-                           type: 'background',
-                           content: fileToPlay.name,
-                           start_time: currentSecs,
-                           session_token: sessionToken
-                       });
-                       await audioRef.current.play();
-                   } catch (err) {
-                       console.error("Playback failed:", err);
-                       // ... error handling ...
-                       return; 
-                   }
-              } else {
-                  // ... Pause ...
-                  // ...
+                  await api.post('/realtime/start', {
+                      user: currentUser?.name || 'Admin',
+                      zones: targetZones, 
+                      type: 'background',
+                      content: fileToPlay.name,
+                      start_time: currentSecs
+                  });
+                  await audioRef.current.play();
+              } catch (err) {
+                  console.error("Playback failed:", err);
+                  setErrorMessage("Playback failed: " + err.message);
+                  setShowErrorModal(true);
+                  isManuallyPaused.current = true; // Safety
               }
           } else {
-              // Play New
-              if (fileToPlay.url) {
-                 // ... Setup ...
-                 try {
-                     // Tell backend to start FRESH
-                     const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
-                     const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
-
-                     await api.post('/realtime/start', {
-                         user: currentUser?.name || 'Admin',
-                         zones: targetZones, 
-                         type: 'background',
-                         content: fileToPlay.name,
-                         start_time: 0,
-                         session_token: sessionToken
-                     });
-                     
-                     await audioRef.current.play();
-                 } catch (err) {
-                     // ... Error ...
-                     setErrorMessage("Could not play audio: " + err.message);
-                     setShowErrorModal(true);
-                     setPlayingId(null);
-                     return; 
-                 }
-                 // ... Logging ...
-              } else if (fileToPlay.content) {
-                  // ... Legacy ...
+              console.log("[Upload] Manual Pause Triggered");
+              isManuallyPaused.current = true;
+              audioRef.current.pause();
+              try {
+                  await api.post(`/realtime/stop?user=${encodeURIComponent(currentUser?.name || 'Admin')}&type=background`);
+              } catch (e) {
+                  console.warn("Failed to notify backend of pause", e);
               }
           }
-      } finally {
-          isProcessing.current = false;
+      } else {
+          // Play New
+          // New: Use 'url' from backend (Static File)
+          if (fileToPlay.url) {
+             const fullUrl = `${api.defaults.baseURL}${fileToPlay.url}`;
+             console.log("Playing from URL:", fullUrl);
+             audioRef.current.src = fullUrl;
+             
+             try {
+                 setPlayingId(id);
+                 startTimeRef.current = Date.now();
+                 isManuallyPaused.current = false;
+                 setCurrentTime(0);
+
+                 // Tell backend to start FRESH
+                 // Calculate active zones
+                 const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+                 const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
+
+                 await api.post('/realtime/start', {
+                     user: currentUser?.name || 'Admin',
+                     zones: targetZones, 
+                     type: 'background',
+                     content: fileToPlay.name,
+                     start_time: 0
+                 });
+                 
+                 await audioRef.current.play();
+                 
+                 // Log activity
+             try {
+                 const newLogId = await logActivity(
+                     currentUser?.name || 'Admin',
+                     'Music Session',
+                     'Music',
+                     `${fileToPlay.name} (Start: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                 );
+                 setCurrentLogId(newLogId);
+             } catch (logErr) {
+                 console.error("Logging failed", logErr);
+             }
+             } catch (err) {
+                 console.error("Playback load failed:", err);
+                 setErrorMessage("Could not play audio: " + err.message);
+                 setShowErrorModal(true);
+             }
+          } else if (fileToPlay.content) {
+              // Fallback for legacy local files (if any persist in cache)
+              audioRef.current.src = fileToPlay.content;
+              // ... (Start play)
+              await audioRef.current.play();
+              setPlayingId(id);
+          }
       }
+      isProcessing.current = false;
   };
  
   // Modal
@@ -347,45 +340,52 @@ const Upload = () => {
 
   const handleFileChange = async (e) => {
       const selectedFiles = Array.from(e.target.files);
-      const newFilesToUpload = [];
-      const duplicates = [];
+      const processedThisBatch = new Set();
+      let hasError = false;
+      let errorMsg = "";
 
-      // 1. Filter Duplicates
       for (const file of selectedFiles) {
-          if (files.some(f => f.name === file.name)) {
-               duplicates.push(file.name);
-          } else {
-               newFilesToUpload.push(file);
+          // Check Duplication (by name)
+          // Also check if we already processed it in this batch (for some reason if browser sends dupe)
+          if (files.some(f => f.name === file.name) || processedThisBatch.has(file.name)) {
+               console.warn(`Skipping duplicate: ${file.name}`);
+               if (!hasError) {
+                   hasError = true;
+                   errorMsg = `Skipped duplicate file(s): ${file.name}`;
+               } else {
+                   errorMsg += `, ${file.name}`;
+               }
+               continue;
           }
-      }
 
-      // 2. Show Error for Duplicates (Single Modal)
-      if (duplicates.length > 0) {
-           setErrorMessage(`Skipped ${duplicates.length} duplicate file(s): ${duplicates.join(', ')}`);
-           setShowErrorModal(true);
-      }
-
-      // 3. Upload New Files
-      if (newFilesToUpload.length > 0) {
-          for (const file of newFilesToUpload) {
-              const formData = new FormData();
-              formData.append('file', file);
+          const formData = new FormData();
+          formData.append('file', file);
+          
+          try {
+              const res = await api.post(`/files/upload?user=${encodeURIComponent(currentUser?.name || 'Admin')}`, formData, {
+                  headers: { 'Content-Type': 'multipart/form-data' }
+              });
               
-              try {
-                  const res = await api.post(`/files/upload?user=${encodeURIComponent(currentUser?.name || 'Admin')}`, formData, {
-                      headers: { 'Content-Type': 'multipart/form-data' }
-                  });
-                  addFile(res.data);
-              } catch (err) {
-                  console.error("Upload failed", err);
-                  // Don't override duplicate error message if it exists, maybe append?
-                  // For simplicity, just log or let user know. 
-                  // If we want to show error, we might conflict with duplicate modal.
-                  // Let's rely on console for individual failures to keep UI clean, or replace modal.
-                  setErrorMessage(`Failed to upload ${file.name}: ${err.response?.data?.detail || err.message}`);
-                  setShowErrorModal(true);
+              // Backend returns the file object which matches our needed structure
+              // Check if backend returned an existing file (idempotent)
+              const uploadedFile = res.data;
+              
+              // Double check if it exists in state now (race condition?)
+              addFile(uploadedFile);
+              processedThisBatch.add(uploadedFile.name);
+              
+          } catch (err) {
+              console.error("Upload failed", err);
+              if (!hasError) {
+                  hasError = true;
+                  errorMsg = `Failed to upload ${file.name}: ${err.response?.data?.detail || err.message}`;
               }
           }
+      }
+      
+      if (hasError) {
+          setErrorMessage(errorMsg);
+          setShowErrorModal(true);
       }
       
       // Reset Input
@@ -499,11 +499,11 @@ const Upload = () => {
         <h3 className="text-lg font-semibold text-gray-700 mb-4">Select Target Zones:</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {Object.keys(zones).map((label, idx) => (
-             <label key={idx} className={`flex items-center space-x-3 p-3 border border-gray-100 rounded-lg transition-all duration-200 shadow-sm ${(isPlaying || (systemState?.active_task && systemState.active_task.type === 'BACKGROUND')) ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50 cursor-pointer active:scale-95 hover:shadow-md'}`}>
+             <label key={idx} className={`flex items-center space-x-3 p-3 border border-gray-100 rounded-lg transition-all duration-200 shadow-sm ${isPlaying ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50 cursor-pointer active:scale-95 hover:shadow-md'}`}>
                <input 
                  type="checkbox" 
                  checked={zones[label]}
-                 disabled={isPlaying || (systemState?.active_task && systemState.active_task.type === 'BACKGROUND')}
+                 disabled={isPlaying}
                  onChange={() => {
                     if (label === 'All Zones') {
                         const newValue = !zones['All Zones'];

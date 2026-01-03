@@ -45,8 +45,17 @@ async def upload_file(file: UploadFile = File(...), user: str = Query("Unknown")
         file_location = os.path.join(MEDIA_DIR, file.filename)
         
         # Check if file exists
+        # Check if file exists
         if os.path.exists(file_location):
-            raise HTTPException(status_code=409, detail=f"File '{file.filename}' already exists.")
+            logging.info(f"File already exists: {file.filename}")
+            # Return existing file details (Idempotency)
+            stats = os.stat(file_location)
+            return {
+                "id": file.filename,
+                "name": file.filename,
+                "size": f"{stats.st_size / 1024 / 1024:.2f} MB",
+                "url": f"/media/{file.filename}"
+            }
 
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(file.file, file_object)
