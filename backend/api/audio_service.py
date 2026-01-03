@@ -323,9 +323,11 @@ class AudioService:
                 # 1. Intro
                 if intro:
                     cmd = ['play'] + base_args + [intro] + remix_flags
-                    p = subprocess.Popen(cmd, env=env)
+                    p = subprocess.Popen(cmd, env=env, stderr=subprocess.PIPE, text=True)
                     self._track_process(p)
-                    p.wait()
+                    _, stderr = p.communicate()
+                    if p.returncode != 0:
+                        print(f"[AudioService] Intro Playback FAILED: {stderr}")
                     self._untrack_process(p)
                 
                 # 2. Body
@@ -334,9 +336,18 @@ class AudioService:
                     if start_time > 0: cmd.extend(['trim', str(start_time)])
                     cmd = cmd + remix_flags
                     
-                    p = subprocess.Popen(cmd, env=env)
+                    print(f"[AudioService] Executing: {' '.join(cmd)}")
+                    p = subprocess.Popen(cmd, env=env, stderr=subprocess.PIPE, text=True)
                     self._track_process(p)
-                    p.wait()
+                    _, stderr = p.communicate()
+                    
+                    if p.returncode != 0:
+                         print(f"[AudioService] Body Playback FAILED (Code {p.returncode}): {stderr}")
+                    elif stderr:
+                         # SoX writes progress/info to stderr sometimes, only print if looks like warning
+                         if "WARN" in stderr or "FAIL" in stderr:
+                             print(f"[AudioService] SoX Output: {stderr}")
+                             
                     self._untrack_process(p)
             else:
                 # Fallback Aplay (No Remix support)
