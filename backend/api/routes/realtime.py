@@ -16,8 +16,6 @@ class BroadcastRequest(BaseModel):
     type: str = "voice" # 'voice' or 'text'
     content: Optional[str] = None # Text content or encoded metadata
     voice: Optional[str] = None # 'female' or 'male'
-    start_time: float = 0
-    session_token: Optional[str] = None # NEW: Session Tracking
 
 class BroadcastAction(BaseModel):
     user: str
@@ -29,19 +27,6 @@ class BroadcastAction(BaseModel):
 class SeekRequest(BaseModel):
     user: str
     time: float
-
-class HeartbeatRequest(BaseModel):
-    session_token: Optional[str] = None
-
-@real_time_announcements_router.post("/heartbeat")
-def heartbeat(user: str, req: HeartbeatRequest = None, user_token: dict = Depends(verify_token)):
-    """
-    Called periodically by frontend to confirm 'User Presence'.
-    If missing for >15s, controller auto-stops active session music.
-    """
-    token = req.session_token if req else None
-    controller.register_heartbeat(user, token)
-    return {"status": "alive"}
 
 @real_time_announcements_router.post("/start")
 def start_broadcast(req: BroadcastRequest, user_token: dict = Depends(verify_token)):
@@ -64,12 +49,10 @@ def start_broadcast(req: BroadcastRequest, user_token: dict = Depends(verify_tok
         type=task_type,
         priority=priority,
         data={
-             "user": req.user,
+            "user": req.user,
             "zones": req.zones,
             "content": req.content,
-            "voice": req.voice,
-            "start_time": req.start_time,
-            "session_token": req.session_token # NEW: Session Tracking
+            "voice": req.voice
         }
     )
     
@@ -116,29 +99,10 @@ def stop_broadcast(user: str, type: str = "voice", task_id: Optional[str] = None
     return {"message": "Broadcast Stopped"}
 
 @real_time_announcements_router.post("/stop-session")
-def stop_session_audio(user: str, token: Optional[str] = None, authorization: Optional[str] = Header(None)):
+def stop_session_audio(user: str, user_token: dict = Depends(verify_token)):
     """
-    Stops current audio if it's NOT a schedule. Called on logout/tab close.
-    Accepts token via Header OR Query Param (for sendBeacon).
+    Stops current audio if it's NOT a schedule. Called on logout.
     """
-    # 1. Resolve Token
-    actual_token = None
-    if authorization and "Bearer " in authorization:
-        actual_token = authorization.split("Bearer ")[1]
-    elif token:
-        actual_token = token
-    
-    if not actual_token:
-         raise HTTPException(status_code=401, detail="Missing Token")
-
-    # 2. Verify
-    try:
-        from firebase_admin import auth
-        auth.verify_id_token(actual_token, clock_skew_seconds=60)
-    except Exception as e:
-        print(f"Token verification failed: {e}")
-        raise HTTPException(status_code=401, detail=f"Invalid Token: {e}")
-
     controller.stop_session_task(user)
     return {"message": "Session Audio Stopped"}
 

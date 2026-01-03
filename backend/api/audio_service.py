@@ -323,11 +323,9 @@ class AudioService:
                 # 1. Intro
                 if intro:
                     cmd = ['play'] + base_args + [intro] + remix_flags
-                    p = subprocess.Popen(cmd, env=env, stderr=subprocess.PIPE, text=True)
+                    p = subprocess.Popen(cmd, env=env)
                     self._track_process(p)
-                    _, stderr = p.communicate()
-                    if p.returncode != 0:
-                        print(f"[AudioService] Intro Playback FAILED: {stderr}")
+                    p.wait()
                     self._untrack_process(p)
                 
                 # 2. Body
@@ -336,18 +334,9 @@ class AudioService:
                     if start_time > 0: cmd.extend(['trim', str(start_time)])
                     cmd = cmd + remix_flags
                     
-                    print(f"[AudioService] Executing: {' '.join(cmd)}")
-                    p = subprocess.Popen(cmd, env=env, stderr=subprocess.PIPE, text=True)
+                    p = subprocess.Popen(cmd, env=env)
                     self._track_process(p)
-                    _, stderr = p.communicate()
-                    
-                    if p.returncode != 0:
-                         print(f"[AudioService] Body Playback FAILED (Code {p.returncode}): {stderr}")
-                    elif stderr:
-                         # SoX writes progress/info to stderr sometimes, only print if looks like warning
-                         if "WARN" in stderr or "FAIL" in stderr:
-                             print(f"[AudioService] SoX Output: {stderr}")
-                             
+                    p.wait()
                     self._untrack_process(p)
             else:
                 # Fallback Aplay (No Remix support)
@@ -484,16 +473,7 @@ class AudioService:
                 except: pass
                 self.stream_process = None
 
-    def play_chime_sync(self, zones):
-        """Plays the intro chime on specified zones. Blocks until finished."""
-        target_cards = self._get_target_cards(zones)
-        intro_path = self.system_sounds_dir / "intro.mp3"
-        
-        if not intro_path.exists():
-            print(f"[AudioService] Chime skipped: {intro_path} not found")
-            return
 
-        abs_intro = str(intro_path.absolute())
 
     def play_chime_sync(self, zones):
         """Plays the intro chime on specified zones. Blocks until finished."""
@@ -601,23 +581,15 @@ class AudioService:
 
     def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""
-        print(f"[AudioService] DEBUG: play_background_music called for {file_path}, Zones: {zones}, Start: {start_time}")
         self.stop()
         targets = self._get_target_cards(zones)
-        print(f"[AudioService] DEBUG: Targets Resolved: {targets}")
         
         # Run in a separate thread to avoid blocking the Controller
         def daemon_play():
-            try:
-                print(f"[AudioService] DEBUG: Inside daemon thread. Calling _play_multizone...")
-                self._play_multizone(None, file_path, targets, start_time=start_time)
-                print(f"[AudioService] DEBUG: _play_multizone finished (Thread Exit)")
-            except Exception as e:
-                print(f"[AudioService] CRITICAL THREAD ERROR: {e}")
+            self._play_multizone(None, file_path, targets, start_time=start_time)
             
         t = threading.Thread(target=daemon_play, daemon=True)
         t.start()
-        print(f"[AudioService] DEBUG: Music Thread Started")
 
     def _play_single_file_linux(self, file_path, card_id):
         """Plays a single file on a specific card"""
@@ -664,68 +636,33 @@ class AudioService:
         else:
             subprocess.run(['aplay', '-D', 'plughw:0,0', file_path])
 
-    # --- ROBUST PROCESS MANAGEMENT ---
-    def _kill_process(self, process):
-        """Robustly kills a process and its children."""
-        if not process:
-            return
-
-        pid = process.pid
-        logger.info(f"Killing process {pid}...")
-
-        try:
-            # 1. Try standard terminate
-            process.terminate()
-            
-            # 2. Wait briefly
-            try:
-                process.wait(timeout=0.5)
-            except subprocess.TimeoutExpired:
-                 # 3. Force Kill (Windows/Linux)
-                if self.os_type == "Windows":
-                     subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
-                else:
-                     # Linux: Kill process group if possible
-                     try:
-                         os.killpg(os.getpgid(pid), 9)
-                     except:     
-                         process.kill() 
-        except Exception as e:
-            logger.error(f"Error killing process {pid}: {e}")
-
-    def cleanup_all(self):
-        """Forcefully cleans up all audio processes on startup."""
-        self.stop()
-        if self.os_type == "Linux":
-             # Ensure no zombie libsox/mpg123 processes
-             try:
-                 subprocess.run(["pkill", "-9", "-f", "sox"], capture_output=True)
-                 subprocess.run(["pkill", "-9", "-f", "play"], capture_output=True)
-                 subprocess.run(["pkill", "-9", "-f", "mpg123"], capture_output=True)
-                 subprocess.run(["pkill", "-9", "-f", "aplay"], capture_output=True)
-             except: pass
-
     def stop(self):
         with self._lock:
+            if self.current_process:
+                try: self.current_process.terminate()
+                except: pass
+                self.current_process = None
+            
             # Stop Siren
             self._siren_stop_event.set()
             self._siren_active = False
             
-            # Stop Legacy Process
-            if self.current_process:
-                self._kill_process(self.current_process)
-                self.current_process = None
-            
-            # Stop Tracked Processes
+            # 1. Direct Process Termination
             with self.proc_lock:
                 for proc in self.active_processes:
-                    self._kill_process(proc)
+                    try:
+                        print(f"[AudioService] Terminating process {proc.pid}")
+                        proc.terminate()
+                        # Wait briefly for termination
+                        try: proc.wait(timeout=0.2)
+                        except: proc.kill()
+                    except: pass
                 self.active_processes.clear()
 
-            # Linux Fallback (Aggressive Global Kill)
+            # 2. Linux Fallback: killall aplay? A bit aggressive but effective for "Stop" button.
             if self.os_type != "Windows":
-                 # We prefer explicit tracking, but pkill is backup for orphans
-                 pass 
+                os.system("killall -q aplay")
+                os.system("killall -q play")
             
             self.stop_streaming()
 

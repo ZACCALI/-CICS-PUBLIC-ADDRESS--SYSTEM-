@@ -41,11 +41,10 @@ export const AuthProvider = ({ children }) => {
                 
                 // IMPORTANT: Status Check - Force logout if pending/banned
                 if (data.status === 'pending') {
-                    // Logic to handle pending state updates live? 
-                    // Maybe we don't force logout immediately to allow UI to show "Pending" message?
-                    // But typically we want them out or restricted. 
-                    // Login function blocks them initially. 
-                    // If they are approved while on the page, they gain access!
+                    console.warn("User is pending. Forcing logout.");
+                    signOut(auth).then(() => {
+                         window.location.href = '/';
+                    });
                 }
             } else {
                  // First time user or doc missing?

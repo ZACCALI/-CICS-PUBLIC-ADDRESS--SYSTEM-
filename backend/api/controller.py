@@ -94,15 +94,10 @@ class PAController:
         self.last_background_content: Optional[str] = None
 
         # Reset Logic on init to ensure clean state
-        audio_service.cleanup_all() # <--- KILL ZOMBIE MUSIC ON STARTUP
         self._reset_state()
         
         # Cleanup State
-        # Cleanup State
         self.last_cleanup = datetime.now()
-        
-        # Monitor Heartbeats
-        self.last_heartbeats: Dict[str, datetime] = {}
 
         # Start Scheduler Thread
         self.scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
@@ -218,12 +213,6 @@ class PAController:
                         print(f"[Controller] Resuming Track: {new_content} at {self.background_resume_time}s")
                     
                     self.background_play_start = None
-
-                    # NEW: Prime the heartbeat with the new session token to prevent race condition/immediate kill
-                    start_token = new_task.data.get('session_token')
-                    user = new_task.data.get('user')
-                    if user and start_token:
-                         self.register_heartbeat(user, start_token)
 
                 # PREEMPTION
                 self._preempt_current_task(new_task.priority)
@@ -466,25 +455,18 @@ class PAController:
             )
             
         elif self.current_task.type == TaskType.BACKGROUND:
-            # FIX: If we are just switching tracks (BACKGROUND -> BACKGROUND), do NOT suspend.
-            if new_priority == Priority.BACKGROUND:
-                 print(f"  -> Switching Track: {self.current_task.id} replaced by new Background Task.")
-                 self.current_task = None
-                 # Do not set suspended_task
-                 # audio_service.stop() will happen below
-            else:
-                 # Soft Stop: Suspend (Only if Higher Priority Interrupted)
-                 print(f"  -> [SUSPEND] Suspending Background Task {self.current_task.id} for {new_priority}")
-                 
-                 # Save offset correctly
-                 if self.background_play_start:
-                     elapsed = (datetime.now() - self.background_play_start).total_seconds()
-                     self.background_resume_time += elapsed
-                     print(f"  -> Saved resume offset: {self.background_resume_time}s")
-                     self.background_play_start = None
+            # Soft Stop: Suspend
+            print(f"  -> [SUSPEND] Suspending Background Task {self.current_task.id} for {new_priority}")
+            
+            # Save offset correctly
+            if self.background_play_start:
+                elapsed = (datetime.now() - self.background_play_start).total_seconds()
+                self.background_resume_time += elapsed
+                print(f"  -> Saved resume offset: {self.background_resume_time}s")
+                self.background_play_start = None
 
-                 self.suspended_task = self.current_task
-                 self.current_task = None
+            self.suspended_task = self.current_task
+            self.current_task = None
             # Do NOT mark COMPLETED. State remains valid in object.
         
         else:
@@ -661,7 +643,6 @@ class PAController:
                     # Async Playback on All Zones (or specified)
                     zones = task.data.get('zones', ['All Zones'])
                     if isinstance(zones, str): zones = [z.strip() for z in zones.split(',')]
-                    print(f"[Controller] DEBUG: Dispatching Background Music to Zones: {zones}")
                     audio_service.play_background_music(abs_media, zones=zones, start_time=start_offset)
                     
                     notification_service.create(
@@ -761,53 +742,10 @@ class PAController:
         except Exception as e:
             print(f"[Controller] DB Error: {e}")
 
-        self.last_heartbeats: Dict[str, dict] = {} # User -> {timestamp, token}
-
-    def register_heartbeat(self, user: str, token: str = None):
-        with self._lock:
-            self.last_heartbeats[user] = {
-                'time': datetime.now(),
-                'token': token
-            }
-
     # --- SCHEDULER LOOP ---
     def _scheduler_loop(self):
         while self._running:
             time.sleep(1) # Tiick every 1s
-            
-            # --- HEARTBEAT CHECK ---
-            if self.current_task and self.current_task.type in [TaskType.BACKGROUND, TaskType.VOICE]:
-               # Only monitor Background/Voice tasks (Schedules run on their own)
-               owner = self.current_task.data.get('user')
-               task_token = self.current_task.data.get('session_token') # Token of the creator
-
-               if owner and owner != 'System':
-                   hb_data = self.last_heartbeats.get(owner)
-                   if hb_data:
-                       last_beat = hb_data['time']
-                       last_token = hb_data.get('token')
-                       
-                       # 1. TIMEOUT CHECK
-                       seconds_since = (datetime.now() - last_beat).total_seconds()
-                       if seconds_since > 15: # 15s Timeout
-                           print(f"[Controller] Heartbeat Lost for {owner} ({seconds_since}s ago). Stopping session.")
-                           self.stop_session_task(owner)
-                       
-                       # 2. SESSION MISMATCH CHECK (The Fix for Refresh)
-                       # If task has a specific token, and the heartbeat comes from a NEW token -> Kill Old Task
-                       # (Only if task_token is set, to avoid killing legacy sessions aggressively? Actually, we want aggressive)
-                       elif task_token and last_token and task_token != last_token:
-                           print(f"[Controller] Session Token Mismatch for {owner}. Old: {task_token}, New: {last_token}. Killing zombie task.")
-                           self.stop_session_task(owner)
-
-                   # 3. STRICT MODE (No Heartbeat Ever)
-                   elif self.current_task.type == TaskType.BACKGROUND: 
-                        # If just started, give grace period? 
-                        created_ago = (datetime.now() - self.current_task.created_at).total_seconds()
-                        if created_ago > 25: 
-                             # STRICT KILL: If user has played music for 25s and NEVER sent a heartbeat, they are likely gone/zombie.
-                             print(f"[Controller] Security: No heartbeat registered for {owner} (>25s). Killing zombie session.")
-                             self.stop_session_task(owner)
             
             # --- OPTIMIZATION: PERIODIC CLEANUP (Every 24 Hours) ---
             if (datetime.now() - self.last_cleanup).total_seconds() > 86400:
@@ -852,13 +790,6 @@ class PAController:
                 # Preempt lower priority if needed
                 if self.current_task:
                     self._preempt_current_task(next_task.priority)
-                
-                # Start
-                # We need to call _start_task, but we are inside lock? 
-                # _start_task assumes lock is held? No, _start_task updates internal state.
-                # But request_playback calls it.
-                # Here we are in scheduler loop, we should just run it.
-                self._start_task(next_task)
 
                 self._start_task(next_task)
                 
