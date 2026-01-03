@@ -131,7 +131,9 @@ def seek_music(req: SeekRequest, user_token: dict = Depends(verify_token)):
 def heartbeat(user: str, user_token: dict = Depends(verify_token)):
     """
     Simple heartbeat to confirm connection and user presence.
+    Updates Watchdog timer.
     """
+    controller.update_heartbeat(user)
     return {"status": "ok", "user": user}
 
 @real_time_announcements_router.post("/log")

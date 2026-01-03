@@ -18,7 +18,8 @@ export const AppProvider = ({ children }) => {
   const authTokenRef = useRef(null); // Track token for dead-man switch
 
   useEffect(() => {
-     const unsubAuth = auth.onAuthStateChanged(async (user) => {
+     // Use onIdTokenChanged to handle token refreshes automatically
+     const unsubAuth = auth.onIdTokenChanged(async (user) => {
          setCurrentUser(user);
          if (user) {
              const token = await user.getIdToken();
@@ -29,6 +30,26 @@ export const AppProvider = ({ children }) => {
      });
      return () => unsubAuth();
   }, []);
+
+  // Watchdog Heartbeat (5s Interval)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const sendHeartbeat = async () => {
+        try {
+            await api.post(`/realtime/heartbeat?user=${encodeURIComponent(currentUser.displayName || 'Admin')}`);
+        } catch (e) {
+            // changes
+            console.warn("Heartbeat failed", e);
+        }
+    };
+
+    // Initial beat
+    sendHeartbeat();
+    
+    const interval = setInterval(sendHeartbeat, 5000); // 5s Interval
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
   useEffect(() => {
       if (!currentUser) {
