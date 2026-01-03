@@ -178,7 +178,9 @@ const Upload = () => {
                       // Don't call play() immediately to avoid double-audio glitches if using browser audio. 
                       // But we ARE using browser audio (muted) for timing.
                       // So we SHOULD play.
-                      audioRef.current.play().catch(e => console.error("Sync Play failed", e));
+                      // audioRef.current.play().catch(e => console.error("Sync Play failed", e));
+                      // DISABLED AUTO-PLAY ON REFRESH.
+                      console.log("Ready to play (User Action Required)");
                   }
               }
           }
@@ -202,13 +204,13 @@ const Upload = () => {
           const isMyUser = task.data?.user === currentUserName;
           
           if (task.type === 'BACKGROUND' || task.priority === 10) {
-              // It's Background Mode. ONLY auto-resume if NOT manually paused.
-             if (isMyUser && audioRef.current.paused && !isManuallyPaused.current) {
-                 console.log("[Resume Logic] System Idle -> Auto-Resuming", currentUserName);
-                 audioRef.current.play().catch(e => console.error("Resume failed", e));
-             } else {
-                 console.log("[Resume Logic] Stay Paused (Manual Pause Active or Not My Track)");
-             }
+              // It's Background Mode.
+              // REMOVED AUTO-RESUME: Default to Paused on Load/Refresh to prevent ghost playback.
+              // User must click Play manually if they return.
+              if (isMyUser && audioRef.current.paused) {
+                 console.log("[Resume Logic] Track is loaded. Waiting for user action.");
+                 // Do not auto-play.
+              }
           } else {
               // Higher priority task active (Voice/Schedule) -> PAUSE
               if (!audioRef.current.paused) {
