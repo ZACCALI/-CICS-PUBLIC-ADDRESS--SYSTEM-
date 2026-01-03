@@ -661,6 +661,7 @@ class PAController:
                     # Async Playback on All Zones (or specified)
                     zones = task.data.get('zones', ['All Zones'])
                     if isinstance(zones, str): zones = [z.strip() for z in zones.split(',')]
+                    print(f"[Controller] DEBUG: Dispatching Background Music to Zones: {zones}")
                     audio_service.play_background_music(abs_media, zones=zones, start_time=start_offset)
                     
                     notification_service.create(
