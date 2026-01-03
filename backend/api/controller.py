@@ -232,19 +232,23 @@ class PAController:
                 return False
 
     def stop_session_task(self, user: str):
-        """Used during logout to stop personal audio (Music, Voice, Text, Emergency)"""
+        """Used during logout/tab-close to stop personal audio (Music, Voice, Text, Emergency)"""
         with self._lock:
-            if not self.current_task:
-                return
-            
-            # NEVER stop schedules on logout
-            if self.current_task.type == TaskType.SCHEDULE:
+            # 1. PROTECT SCHEDULES: Never stop them on session end.
+            if self.current_task and self.current_task.type == TaskType.SCHEDULE:
                 print(f"[Controller] Logout: Keeping Schedule {self.current_task.id} active.")
                 return
 
-            print(f"[Controller] Logout: Stopping {self.current_task.type} for session end.")
-            # For logout, we use 'System' as the stop requester to allow override
-            self.stop_task(None, user='System')
+            # 2. FORCE STOP: Even if current_task is None, we call audio_service.stop()
+            # This ensures any 'Ghost' or 'Zombie' audio processes are killed.
+            print(f"[Controller] Session End: Forcing Audio Stop.")
+            
+            if self.current_task:
+                 # Normal Stop (Updates DB, Cleanup)
+                 self.stop_task(None, user='System')
+            else:
+                 # Zombie Kill (Direct Audio Service Stop)
+                 audio_service.stop()
 
     def stop_task(self, task_id: str, task_type: str = None, user: str = None):
         """Called to manually stop a task (e.g., Stop Broadcast, Clear Emergency)"""
