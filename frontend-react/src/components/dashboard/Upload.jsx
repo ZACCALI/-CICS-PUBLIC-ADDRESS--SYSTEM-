@@ -145,6 +145,7 @@ const Upload = () => {
 
       const task = systemState.active_task;
       // If we are fresh (no playingId) but system says Music is Playing
+      // OR if matching task is in INTERRUPTED state
       if (!playingId && task.type === 'BACKGROUND') {
           console.log("[State Sync] Found active background task:", task);
           
@@ -158,17 +159,31 @@ const Upload = () => {
               if (fileMatch) {
                   console.log("[State Sync] Restoring Player State for:", fileMatch.name);
                   setPlayingId(fileMatch.id);
-                  setIsPlaying(true); 
-                  // Ideally we would sync currentTime too if backend provided it, but it doesn't yet.
-                  // For now, it will start from 0 visually, but backend is already playing.
-                  // Since audio.volume=0, it doesn't matter if we 'play' locally from 0.
-                  // BUT we want the valid seeking UI. 
-                  if (audioRef.current) {
-                      audioRef.current.src = fileMatch.url;
-                      // Don't call play() immediately to avoid double-audio glitches if using browser audio. 
-                      // But we ARE using browser audio (muted) for timing.
-                      // So we SHOULD play.
-                      audioRef.current.play().catch(e => console.error("Sync Play failed", e));
+                  
+                  // Check Status: 2=PLAYING, 3=INTERRUPTED(PAUSED)
+                  const isPaused = task.status === 3;
+
+                  if (isPaused) {
+                      console.log("[State Sync] Task is Paused/Interrupted. initializing paused.");
+                      setIsPlaying(false);
+                      isManuallyPaused.current = true;
+                      // Don't play, but set src so it's ready
+                      if (audioRef.current && fileMatch.url) {
+                         audioRef.current.src = `${api.defaults.baseURL}${fileMatch.url}`;
+                      }
+                  } else {
+                      setIsPlaying(true); 
+                      // Ideally we would sync currentTime too if backend provided it, but it doesn't yet.
+                      // For now, it will start from 0 visually, but backend is already playing.
+                      // Since audio.volume=0, it doesn't matter if we 'play' locally from 0.
+                      // BUT we want the valid seeking UI. 
+                      if (audioRef.current) {
+                           audioRef.current.src = fileMatch.url;
+                           // Don't call play() immediately to avoid double-audio glitches if using browser audio. 
+                           // But we ARE using browser audio (muted) for timing.
+                           // So we SHOULD play.
+                           audioRef.current.play().catch(e => console.error("Sync Play failed", e));
+                      }
                   }
               }
           }

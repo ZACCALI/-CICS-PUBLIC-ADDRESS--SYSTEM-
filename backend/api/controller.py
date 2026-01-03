@@ -198,9 +198,15 @@ class PAController:
                     if self.current_task.data.get('content') == new_task.data.get('content'):
                         # Check start_time to distinguish between "Seek" and "Redundant Play"
                         # If start_time is 0, it's usually a redundant "New Play" click.
+                        # If start_time is 0, it's usually a redundant "New Play" click.
                         if new_task.data.get('start_time') == 0:
-                            print(f"[Controller] Ignoring redundant start request for: {new_task.data.get('content')}")
-                            return True # Success (but do nothing)
+                             # CHECK: If current is 'INTERRUPTED' (Paused), we should allow this to proceed (Resume)
+                             if self.current_task.status == State.INTERRUPTED:
+                                 print(f"[Controller] Resuming Paused Track: {new_task.data.get('content')}")
+                                 # Fall through to execute logic
+                             else:
+                                 print(f"[Controller] Ignoring redundant start request for: {new_task.data.get('content')}")
+                                 return True # Success (but do nothing)
 
                 # FRESH START: If it's a new Background Music request, reset the resume offset
                 if new_task.type == TaskType.BACKGROUND:
@@ -240,6 +246,29 @@ class PAController:
             # NEVER stop schedules on logout
             if self.current_task.type == TaskType.SCHEDULE:
                 print(f"[Controller] Logout: Keeping Schedule {self.current_task.id} active.")
+                return
+
+            # NEW: If Background Music, PAUSE it (Don't Kill) so user can resume on reload
+            if self.current_task.type == TaskType.BACKGROUND:
+                print(f"[Controller] Logout: PAUSING Background Music (Persistence Mode)")
+                
+                # 1. Stop Audio Service
+                audio_service.stop()
+                
+                # 2. Save Offset
+                if self.background_play_start:
+                    elapsed = (datetime.now() - self.background_play_start).total_seconds()
+                    self.background_resume_time += elapsed
+                    self.background_play_start = None
+                
+                # 3. Mark as Interrupted (Paused)
+                self.current_task.status = State.INTERRUPTED
+                
+                # 4. Update Firestore to reflect "Paused" state
+                # We keep the task in active_task slot, but update status.
+                self._update_firestore_state(self.current_task, Priority.BACKGROUND, 'BACKGROUND')
+                
+                # 5. Return (Do NOT call stop_task which clears self.current_task)
                 return
 
             print(f"[Controller] Logout: Stopping {self.current_task.type} for session end.")
