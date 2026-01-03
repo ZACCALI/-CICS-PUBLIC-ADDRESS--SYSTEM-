@@ -590,15 +590,23 @@ class AudioService:
 
     def play_background_music(self, file_path: str, zones: list = None, start_time=0):
         """Plays background music asynchronously on selected zones"""
+        print(f"[AudioService] DEBUG: play_background_music called for {file_path}, Zones: {zones}, Start: {start_time}")
         self.stop()
         targets = self._get_target_cards(zones)
+        print(f"[AudioService] DEBUG: Targets Resolved: {targets}")
         
         # Run in a separate thread to avoid blocking the Controller
         def daemon_play():
-            self._play_multizone(None, file_path, targets, start_time=start_time)
+            try:
+                print(f"[AudioService] DEBUG: Inside daemon thread. Calling _play_multizone...")
+                self._play_multizone(None, file_path, targets, start_time=start_time)
+                print(f"[AudioService] DEBUG: _play_multizone finished (Thread Exit)")
+            except Exception as e:
+                print(f"[AudioService] CRITICAL THREAD ERROR: {e}")
             
         t = threading.Thread(target=daemon_play, daemon=True)
         t.start()
+        print(f"[AudioService] DEBUG: Music Thread Started")
 
     def _play_single_file_linux(self, file_path, card_id):
         """Plays a single file on a specific card"""
