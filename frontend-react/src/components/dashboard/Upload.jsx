@@ -277,8 +277,22 @@ const Upload = () => {
               if (audioRef.current.paused) {
                   // ... Play ...
                    try {
-                       // ... api.post ...
-                       await api.post('/realtime/start', { ... }); 
+                       // Explicitly tell backend to start (with current offset if any)
+                       const currentSecs = audioRef.current.currentTime || 0;
+                       console.log(`[Upload] Starting on Pi at ${currentSecs}s`);
+                       
+                       // Calculate active zones
+                       const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+                       const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
+
+                       await api.post('/realtime/start', {
+                           user: currentUser?.name || 'Admin',
+                           zones: targetZones, 
+                           type: 'background',
+                           content: fileToPlay.name,
+                           start_time: currentSecs,
+                           session_token: sessionToken
+                       });
                        await audioRef.current.play();
                    } catch (err) {
                        console.error("Playback failed:", err);
@@ -294,8 +308,19 @@ const Upload = () => {
               if (fileToPlay.url) {
                  // ... Setup ...
                  try {
-                     // ... api.post ...
-                     await api.post('/realtime/start', { ... });
+                     // Tell backend to start FRESH
+                     const activeZonesKey = Object.keys(zones).filter(k => zones[k]);
+                     const targetZones = activeZonesKey.length > 0 ? activeZonesKey : ['All Zones'];
+
+                     await api.post('/realtime/start', {
+                         user: currentUser?.name || 'Admin',
+                         zones: targetZones, 
+                         type: 'background',
+                         content: fileToPlay.name,
+                         start_time: 0,
+                         session_token: sessionToken
+                     });
+                     
                      await audioRef.current.play();
                  } catch (err) {
                      // ... Error ...
