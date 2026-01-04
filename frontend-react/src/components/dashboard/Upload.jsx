@@ -150,7 +150,8 @@ const Upload = () => {
       if (task.type === 'BACKGROUND') {
           console.log("[State Sync] Found active background task:", task);
           
-          const filename = task.data?.file ? task.data.file.split(/[/\\]/).pop() : null;
+          const rawFn = task.data?.content || task.data?.file;
+          const filename = rawFn ? rawFn.split(/[/\\]/).pop() : null;
           
           if (filename) {
               const fileMatch = files.find(f => f.name === filename || f.id === filename);

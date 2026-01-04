@@ -240,47 +240,52 @@ class PAController:
                 return False
 
     def stop_session_task(self, user: str):
-        """Used during logout to stop personal audio (Music, Voice, Text, Emergency)"""
+        """Used during logout/refresh to stop personal audio."""
         with self._lock:
             if not self.current_task:
                 return
-            
-            # NEVER stop schedules on logout
+
+            # --- PERSISTENCE LOGIC ---
+            # 1. SCHEDULES: Always persist (System owned)
             if self.current_task.type == TaskType.SCHEDULE:
-                print(f"[Controller] Logout: Keeping Schedule {self.current_task.id} active.")
+                print(f"[Controller] Logout Ignore: Keeping Schedule {self.current_task.id} active.")
                 return
 
-            # CHECK OWNERSHIP: Only the user who started the task (or System/Admin) can stop/pause it via session end.
-            task_owner = self.current_task.data.get('user')
-            if task_owner and task_owner != user and user not in ['System', 'Admin']:
-                print(f"[Controller] Logout Ignore: User '{user}' cannot stop task owned by '{task_owner}'.")
+            # 2. EMERGENCY: Always persist (Critical)
+            if self.current_task.type == TaskType.EMERGENCY:
+                print(f"[Controller] Logout Ignore: Keeping Emergency Alert active.")
                 return
 
-            # NEW: If Background Music, PAUSE it (Don't Kill) so user can resume on reload
+            # 3. TEXT: Always persist (Fire-and-forget, let it finish speaking)
+            #    Unlike voice, text has no live stream to cut.
+            if self.current_task.type == TaskType.TEXT:
+                print(f"[Controller] Logout Ignore: Keeping Text Announcement active (Fire-and-forget).")
+                return
+
+            # 4. BACKGROUND MUSIC: PAUSE (Don't Kill) so user can resume on reload
             if self.current_task.type == TaskType.BACKGROUND:
+                # CHECK OWNERSHIP: Only the user who started the task (or System/Admin) can stop/pause it via session end.
+                task_owner = self.current_task.data.get('user')
+                if task_owner and task_owner != user and user not in ['System', 'Admin']:
+                    print(f"[Controller] Logout Ignore: User '{user}' cannot pause task owned by '{task_owner}'.")
+                    return
+
                 print(f"[Controller] Logout: PAUSING Background Music (Persistence Mode)")
                 
-                # 1. Stop Audio Service
+                # Stop Audio Service & Save Offset
                 audio_service.stop()
-                
-                # 2. Save Offset
                 if self.background_play_start:
                     elapsed = (datetime.now() - self.background_play_start).total_seconds()
                     self.background_resume_time += elapsed
                     self.background_play_start = None
                 
-                # 3. Mark as Interrupted (Paused)
+                # Mark as Interrupted (Paused) & Update Firestore
                 self.current_task.status = State.INTERRUPTED
-                
-                # 4. Update Firestore to reflect "Paused" state
-                # We keep the task in active_task slot, but update status.
                 self._update_firestore_state(self.current_task, Priority.BACKGROUND, 'BACKGROUND')
-                
-                # 5. Return (Do NOT call stop_task which clears self.current_task)
                 return
 
-            print(f"[Controller] Logout: Stopping {self.current_task.type} for session end.")
-            # For logout, we use 'System' as the stop requester to allow override
+            # 5. VOICE: FATAL STOP (Mic is dead if tab closes)
+            print(f"[Controller] Logout: Killing {self.current_task.type} (Live Session Ended).")
             self.stop_task(None, user='System')
 
     def stop_task(self, task_id: str, task_type: str = None, user: str = None):
