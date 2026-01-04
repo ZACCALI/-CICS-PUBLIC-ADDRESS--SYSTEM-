@@ -132,6 +132,7 @@ def heartbeat(user: str, user_token: dict = Depends(verify_token)):
     """
     Simple heartbeat to confirm connection and user presence.
     """
+    controller.receive_heartbeat(user)
     return {"status": "ok", "user": user}
 
 @real_time_announcements_router.post("/log")

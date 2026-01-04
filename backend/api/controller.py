@@ -61,6 +61,14 @@ class Task:
             'scheduled_time': self.scheduled_time.isoformat()
         }
 
+    def update_heartbeat(self):
+        """Update the last heartbeat timestamp for this task owner."""
+        pass # We track this in the controller, not the task object itself usually, or we can?
+             # Better to track in controller for the ACTIVE task.
+
+            'scheduled_time': self.scheduled_time.isoformat()
+        }
+
 # --- 3. The Controller ---
 class PAController:
     _instance = None
@@ -907,7 +915,36 @@ class PAController:
                 self._add_to_queue(new_task)
                 
         except Exception as e:
+        except Exception as e:
             print(f"[Scheduler] Recurrence Failed: {e}")
+
+    def _monitor_heartbeats(self):
+        """Watchdog: Kills Voice/Text tasks if user disconnects (no heartbeat > 15s)"""
+        print("[Controller] Heartbeat Monitor Started.")
+        while self.running:
+            time.sleep(5) # Check every 5s
+            
+            with self._lock:
+                if not self.current_task:
+                    continue
+                
+                # Only monitor Live/Interactive tasks (Voice)
+                # Text is fire-and-forget usually, but if it hangs "Processing", maybe we should kill it too?
+                # Let's focus on VOICE logic first as requested.
+                if self.current_task.type == TaskType.VOICE:
+                     delta = (datetime.now() - self.last_heartbeat).total_seconds()
+                     if delta > 15:
+                         print(f"[Controller] WATCHDOG: Task {self.current_task.id} (Voice) timed out. Last heartbeat: {delta}s ago.")
+                         # Force kill
+                         self.stop_task(None, user="System (Watchdog)")
+
+    def receive_heartbeat(self, user: str):
+        """Called by API when frontend sends pulse"""
+        with self._lock:
+            # Only update if the heartbeat comes from the OWNER of the current task
+            if self.current_task and self.current_task.data.get('user') == user:
+                self.last_heartbeat = datetime.now()
+                # print(f"[Controller] Heartbeat received from {user}")
 
     def _cleanup_old_data(self):
         """Optimization: Garbage Collect old data to keep DB lean"""
