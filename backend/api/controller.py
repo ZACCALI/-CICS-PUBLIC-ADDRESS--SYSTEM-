@@ -61,13 +61,7 @@ class Task:
             'scheduled_time': self.scheduled_time.isoformat()
         }
 
-    def update_heartbeat(self):
-        """Update the last heartbeat timestamp for this task owner."""
-        pass # We track this in the controller, not the task object itself usually, or we can?
-             # Better to track in controller for the ACTIVE task.
 
-            'scheduled_time': self.scheduled_time.isoformat()
-        }
 
 # --- 3. The Controller ---
 class PAController:
