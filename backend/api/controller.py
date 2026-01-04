@@ -909,7 +909,6 @@ class PAController:
                 self._add_to_queue(new_task)
                 
         except Exception as e:
-        except Exception as e:
             print(f"[Scheduler] Recurrence Failed: {e}")
 
     def _monitor_heartbeats(self):
