@@ -190,8 +190,10 @@ class PAController:
             if self.current_task and self.current_task.data.get('user') == new_task.data.get('user'):
                 is_same_user = True
 
-            # Logic: Higher Priority WINS OR (Equal Priority AND Same User WINS)
-            if new_task.priority > current_pri or (new_task.priority == current_pri and is_same_user):
+            # Logic: Higher Priority WINS OR (Equal Priority AND Same User WINS) OR (Current is INTERRUPTED/Paused)
+            is_paused = self.current_task and self.current_task.status == State.INTERRUPTED
+            
+            if new_task.priority > current_pri or (new_task.priority == current_pri and is_same_user) or is_paused:
                 
                 # IDEMPOTENCY CHECK: If it's the SAME background track already playing, IGNORE.
                 if self.current_task and self.current_task.type == TaskType.BACKGROUND and new_task.type == TaskType.BACKGROUND:

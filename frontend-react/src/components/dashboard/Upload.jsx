@@ -146,20 +146,28 @@ const Upload = () => {
       const task = systemState.active_task;
       // If we are fresh (no playingId) but system says Music is Playing
       // OR if matching task is in INTERRUPTED state
-      if (!playingId && task.type === 'BACKGROUND') {
+      // OR if we already have the ID, we must sync the STATUS (Playing/Paused)
+      if (task.type === 'BACKGROUND') {
           console.log("[State Sync] Found active background task:", task);
           
-          // 1. Find the file ID from the task data
-          // task.data.file might be the filename or full path. We need to match it to our 'files' list.
-          // The backend stores 'file': 'path/to/song.mp3'. Our 'files' list has 'id' (filename) and 'url'.
           const filename = task.data?.file ? task.data.file.split(/[/\\]/).pop() : null;
           
           if (filename) {
               const fileMatch = files.find(f => f.name === filename || f.id === filename);
+              
               if (fileMatch) {
-                  console.log("[State Sync] Restoring Player State for:", fileMatch.name);
-                  setPlayingId(fileMatch.id);
-                  
+                  // Case A: New Task or Recovering Session
+                  if (!playingId || playingId !== fileMatch.id) {
+                       console.log("[State Sync] Restoring Player State for:", fileMatch.name);
+                       setPlayingId(fileMatch.id);
+                       
+                       // Initialize src if needed
+                       if (audioRef.current) {
+                           audioRef.current.src = `${api.defaults.baseURL}${fileMatch.url}`;
+                       }
+                  }
+
+                  // Case B: State Sync (Running for both New and Existing)
                   // Check Status: 2=PLAYING, 3=INTERRUPTED(PAUSED)
                   const isPaused = task.status === 3;
 
@@ -511,7 +519,9 @@ const Upload = () => {
         )}
 
         {/* ... System Busy Alert Omitted ... */}
-        {systemState?.active_task && systemState.active_task.data?.user !== (currentUser?.name || 'Admin') && (
+        {systemState?.active_task && 
+         systemState.active_task.data?.user !== (currentUser?.name || 'Admin') && 
+         systemState.active_task.status !== 3 && (
             <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-800 p-4 rounded shadow-sm flex items-center animate-fade-in">
                 <i className="material-icons text-2xl mr-3">lock</i>
                 <div>
