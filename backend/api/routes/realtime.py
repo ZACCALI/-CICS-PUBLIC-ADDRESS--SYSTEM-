@@ -98,14 +98,11 @@ def stop_broadcast(user: str, type: str = "voice", task_id: Optional[str] = None
     controller.stop_task(task_id, task_type=target_type, user=user)
     return {"message": "Broadcast Stopped"}
 
-from fastapi import Request
-
 @real_time_announcements_router.post("/stop-session")
-async def stop_session_audio(request: Request, user_token: dict = Depends(verify_token)):
-    # We ignore the body because sendBeacon sends text/plain which fails JSON parsing
-    # The user_token comes from the Query param ?token=... which we added in frontend.
-    user = user_token['uid']
-    print(f"[RealTime] Stop Session requested by {user}")
+def stop_session_audio(user: str, user_token: dict = Depends(verify_token)):
+    """
+    Stops current audio if it's NOT a schedule. Called on logout.
+    """
     controller.stop_session_task(user)
     return {"message": "Session Audio Stopped"}
 
