@@ -562,13 +562,15 @@ export const AppProvider = ({ children }) => {
         const urlBg = `${baseUrl}/realtime/stop-session?user=${encodeURIComponent(possibleUser)}&token=${encodeURIComponent(token)}`;
         
         // Use sendBeacon - much more reliable for 'unload' than fetch
-        const blob = new Blob([JSON.stringify({ reason: "unload" })], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify({ type: 'voice' })], { type: 'application/json' }); 
         const success = navigator.sendBeacon(urlBg, blob);
         
         if (!success) {
-            // Fallback to fetch if beacon fails (e.g. data too large, though unlikely here)
+            // Fallback to fetch if beacon fails
              fetch(urlBg, { 
                 method: 'POST', 
+                body: JSON.stringify({ type: 'voice' }),
+                headers: { 'Content-Type': 'application/json' },
                 keepalive: true
             });
         }

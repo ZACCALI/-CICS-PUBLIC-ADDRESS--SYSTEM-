@@ -285,7 +285,14 @@ class PAController:
                 return
 
             # 5. VOICE: FATAL STOP (Mic is dead if tab closes)
-            print(f"[Controller] Logout: Killing {self.current_task.type} (Live Session Ended).")
+            # FORCE STOP if it's voice, regardless of who asks (since session is dead)
+            if self.current_task.type == TaskType.VOICE:
+                 print(f"[Controller] Logout: Killing Voice Task (Live Session Ended).")
+                 self.stop_task(None, user='System')
+                 return
+
+            print(f"[Controller] Logout: Stopping {self.current_task.type} for session end.")
+            # For logout, we use 'System' as the stop requester to allow override
             self.stop_task(None, user='System')
 
     def stop_task(self, task_id: str, task_type: str = None, user: str = None):
